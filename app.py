@@ -79,10 +79,10 @@ players = get_nhl_stats()
 st.sidebar.write(f"Ladattu {len(players)} pelaajaa")  # Näytä määrä sivupalkissa
 
 def calculate_points(player):
-    """Laske fantasy-pisteet"""
+    """Calculate fantasy points - 1 point per goal, 1 point per assist"""
     goals = player.get("goals", 0)
     assists = player.get("assists", 0)
-    return goals * 3 + assists * 2
+    return goals * 1 + assists * 1  # 1 point for goal, 1 point for assist
 
 # --- TIETOKANTAFUNKTIOT ---
 def save_team(team_name, pin, player_ids):
@@ -161,10 +161,10 @@ elif page == "Luo joukkue":
         d_options = [f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']})" 
                      for p in defense]
         
-        selected_f = st.multiselect("Valitse 3 hyökkääjää", f_options, max_selections=3)
-        selected_d = st.multiselect("Valitse 2 puolustajaa", d_options, max_selections=2)
+        selected_f = st.multiselect("Select 3 forwards", f_options, max_selections=3)
+        selected_d = st.multiselect("Select 2 defensemen", d_options, max_selections=2)
         
-        submit = st.form_submit_button("Tallenna joukkue", type="primary")
+        submit = st.form_submit_button("Save Team", type="primary")
         
         if submit:
             if not team_name or not pin:
@@ -194,10 +194,10 @@ elif page == "Oma joukkue":
     
     # Kirjautuminen
     with st.form("login_form"):
-        st.write("Kirjaudu nähdäksesi joukkueesi")
-        login_name = st.text_input("Joukkueen nimi")
-        login_pin = st.text_input("PIN-koodi", type="password")
-        submit = st.form_submit_button("Kirjaudu")
+        st.write("Login to view your team")
+        login_name = st.text_input("Team naem")
+        login_pin = st.text_input("PIN-code", type="password")
+        submit = st.form_submit_button("Log In")
     
     if submit:
         team = None
@@ -214,7 +214,7 @@ elif page == "Oma joukkue":
             st.success(f"Tervetuloa, {team['team_name']}!")
             
             # Hae pelaajien tiedot
-            st.subheader("Kokoonpano")
+            st.subheader("Roster")
             
             all_players = get_nhl_stats()
             stats_dict = {str(p["playerId"]): p for p in all_players}
