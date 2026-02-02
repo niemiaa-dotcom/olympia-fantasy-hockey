@@ -30,11 +30,20 @@ def hash_pin(pin):
 def get_nhl_stats():
     """Hae pistepörssi NHL API:sta"""
     try:
-        url = f"https://api-web.nhle.com/v1/skater-stats-leaders/20252026/3?categories=points&limit=50"
+        # Kokeile ensin 4 Nations 2025 dataa (20242025 kausi)
+        url = "https://api-web.nhle.com/v1/skater-stats-leaders/20242025/3?categories=points&limit=50"
         response = requests.get(url, timeout=10)
         data = response.json()
+        
+        # Jos tyhjää, kokeile nykyistä NHL-kautta
+        if not data.get("data"):
+            url = "https://api-web.nhle.com/v1/skater-stats-leaders/20232024/2?categories=points&limit=50"
+            response = requests.get(url, timeout=10)
+            data = response.json()
+            
         return data.get("data", [])
-    except:
+    except Exception as e:
+        st.error(f"API-virhe: {e}")
         return []
 
 def calculate_points(player):
