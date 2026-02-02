@@ -7,15 +7,14 @@ from firebase_admin import credentials, firestore
 import requests
 import pandas as pd
 
-# --- ASETUKSET ---
+# --- SETTINGS ---
 st.set_page_config(page_title="Olympia Fantasy Hockey 2026", page_icon="🏒")
 
-# --- FIREBASE ALUSTUS ---
+# --- FIREBASE INITIALIZATION ---
 def init_firebase():
     try:
         firebase_admin.get_app()
     except ValueError:
-        # Lue secrets erillisistä muuttujista (EI ["firebase"] -listaa)
         cred_dict = {
             "type": st.secrets.get("FIREBASE_TYPE", "service_account"),
             "project_id": st.secrets["FIREBASE_PROJECT_ID"],
@@ -36,14 +35,14 @@ def init_firebase():
 def get_db():
     return init_firebase()
 
-# --- APUFUNKTIOT ---
+# --- HELPER FUNCTIONS ---
 def hash_pin(pin):
     return hashlib.sha256(pin.encode()).hexdigest()
 
 def get_nhl_stats():
-    """Hae pistepörssi - käytä testidataa jos API ei toimi"""
+    """Fetch scoring leaders - use test data if API fails"""
     
-    # TESTIDATA (4 Nations 2025 -pelaajia)
+    # TEST DATA (4 Nations 2025 players)
     test_players = [
         {"playerId": 8478402, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"}, "teamName": {"default": "CAN"}, "position": "C", "goals": 4, "assists": 6, "points": 10},
         {"playerId": 8476453, "firstName": {"default": "Nathan"}, "lastName": {"default": "MacKinnon"}, "teamName": {"default": "CAN"}, "position": "C", "goals": 3, "assists": 7, "points": 10},
@@ -58,42 +57,37 @@ def get_nhl_stats():
     ]
     
     try:
-        # Yritä oikeaa API:a ensin
         url = "https://api-web.nhle.com/v1/skater-stats-leaders/20242025/3?categories=points&limit=50"
         response = requests.get(url, timeout=10)
         data = response.json()
         api_players = data.get("data", [])
         
-        # Jos saadaan dataa, käytä sitä
         if len(api_players) > 0:
             return api_players
             
     except Exception as e:
-        st.sidebar.warning(f"API ei vastaa, käytetään testidataa")
+        st.sidebar.warning("API not responding, using test data")
     
-    # Palaa testidataan
     return test_players
 
-# --- DEBUG: Näytä API-vastaus ---
 players = get_nhl_stats()
-st.sidebar.write(f"Ladattu {len(players)} pelaajaa")  # Näytä määrä sivupalkissa
+st.sidebar.write(f"Players loaded: {len(players)}")
 
 def calculate_points(player):
     """Calculate fantasy points - 1 point per goal, 1 point per assist"""
     goals = player.get("goals", 0)
     assists = player.get("assists", 0)
-    return goals * 1 + assists * 1  # 1 point for goal, 1 point for assist
+    return goals * 1 + assists * 1
 
-# --- TIETOKANTAFUNKTIOT ---
+# --- DATABASE FUNCTIONS ---
 def save_team(team_name, pin, player_ids):
     db = get_db()
     team_ref = db.collection("teams").document(team_name)
     
-    # Tarkista onko jo olemassa
     if team_ref.get().exists:
         old_data = team_ref.get().to_dict()
         if hash_pin(pin) != old_data.get("pin_hash"):
-            return False, "Väärä PIN-koodi!"
+            return False, "Wrong PIN code!"
     
     team_ref.set({
         "team_name": team_name,
@@ -102,7 +96,7 @@ def save_team(team_name, pin, player_ids):
         "created_at": datetime.now(),
         "updated_at": datetime.now()
     })
-    return True, "Joukkue tallennettu!"
+    return True, "Team saved successfully!"
 
 def get_all_teams():
     db = get_db()
@@ -113,70 +107,99 @@ def get_all_teams():
         teams.append(data)
     return teams
 
-# --- KÄYTTÖLIITTYMÄ ---
+# --- USER INTERFACE ---
 st.title("🏒 Olympia Fantasy Hockey 2026")
-st.caption("Keeping Karlsson -yhteisön fantasy-peli")
+st.caption("Keeping Karlsson Community Fantasy Game")
 
+page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard"])
 
-# Sivun valinta
-page = st.sidebar.radio("Valikko", ["Etusivu", "Luo joukkue", "Oma joukkue", "Sarjataulukko"])
-
-if page == "Etusivu":
+if page == "Home":
     st.write("""
-    ## Tervetuloa!
+    ## Welcome to Olympia Fantasy Hockey 2026!
     
-    Tässä pelissä kokoat 6 pelaajan joukkueen (3H, 2P, 1V) ja keräät pisteitä 
-    heidän onnistumistensa perusteella.
+    Compete with the Keeping Karlsson community by building your dream team 
+    for the 2026 Winter Olympics hockey tournament.
     
-    ### Pisteytys:
-    - Maali: 3 pistettä
-    - Syöttö: 2 pistettä
+    ### How to Play
+    1. **Create Your Team**: Select 3 forwards, 2 defensemen, and 1 goalie
+    2. **Earn Points**: Players earn points based on their real-life performance
+    3. **Climb the Leaderboard**: Compete for the top spot!
     
-    Valitse sivulta "Luo joukkue" aloittaaksesi!
+    ### Scoring System
+    | Action | Points |
+    |--------|--------|
+    | Goal | 1 pt |
+    | Assist | 1 pt |
+    
+    ### Tournament Teams
+    🇨🇦 Canada | 🇺🇸 USA | 🇸🇪 Sweden | 🇫🇮 Finland
+    
+    *More teams to be announced for 2026 Olympics*
+    
+    **Get started by selecting "Create Team" from the menu!**
     """)
 
-elif page == "Luo joukkue":
-    st.header("📝 Luo tai muokkaa joukkuetta")
+elif page == "Create Team":
+    st.header("📝 Create or Edit Your Team")
+    
+    with st.expander("📋 Team Creation Guide"):
+        st.write("""
+        **Team Composition:**
+        - 3 Forwards (Centers, Left Wing, Right Wing)
+        - 2 Defensemen
+        - 1 Goalie (coming soon)
+        
+        **Important:**
+        - Choose a unique team name
+        - Remember your PIN - you'll need it to edit your team!
+        - You can update your team anytime during the tournament
+        """)
     
     with st.form("team_form"):
         col1, col2 = st.columns(2)
         with col1:
-            team_name = st.text_input("Joukkueen nimi")
+            team_name = st.text_input("Team Name", placeholder="e.g., Puck Dynasty")
         with col2:
-            pin = st.text_input("PIN-koodi", type="password")
+            pin = st.text_input("PIN Code", type="password", placeholder="4-10 digits", help="Used to secure your team")
         
-        st.write("---")
-        st.subheader("Valitse pelaajat")
+        st.divider()
+        st.subheader("Select Your Players")
         
-        # Hae pelaajat
         players = get_nhl_stats()
         
-        # Jaa positioihin (yksinkertaistettu)
         forwards = [p for p in players if p.get("position") in ["C", "L", "R"]] [:20]
         defense = [p for p in players if p.get("position") == "D"] [:15]
         
-        # Näytä valinnat
-        f_options = [f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']})" 
+        f_options = [f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']} - {p['position']})" 
                      for p in forwards]
-        d_options = [f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']})" 
+        d_options = [f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']} - {p['position']})" 
                      for p in defense]
         
-        selected_f = st.multiselect("Select 3 forwards", f_options, max_selections=3)
-        selected_d = st.multiselect("Select 2 defensemen", d_options, max_selections=2)
+        st.write(f"**Available Forwards:** {len(f_options)}")
+        selected_f = st.multiselect("Choose 3 Forwards (Required)", f_options, max_selections=3)
         
-        submit = st.form_submit_button("Save Team", type="primary")
+        st.write(f"**Available Defensemen:** {len(d_options)}")
+        selected_d = st.multiselect("Choose 2 Defensemen (Required)", d_options, max_selections=2)
+        
+        st.info(f"Selected: {len(selected_f)} forwards, {len(selected_d)} defensemen (Need: 3F, 2D)")
+        
+        submit = st.form_submit_button("💾 Save Team", type="primary")
         
         if submit:
-            if not team_name or not pin:
-                st.error("Täytä nimi ja PIN!")
-            elif len(selected_f) != 3 or len(selected_d) != 2:
-                st.error(f"Valitse täsmälleen 3H ja 2P (valitsit {len(selected_f)}H, {len(selected_d)}P)")
+            if not team_name:
+                st.error("Please enter a team name!")
+            elif not pin:
+                st.error("Please enter a PIN code!")
+            elif len(pin) < 4:
+                st.error("PIN must be at least 4 characters!")
+            elif len(selected_f) != 3:
+                st.error(f"Please select exactly 3 forwards (you selected {len(selected_f)})")
+            elif len(selected_d) != 2:
+                st.error(f"Please select exactly 2 defensemen (you selected {len(selected_d)})")
             else:
-                # Kerää ID:t
                 selected_names = selected_f + selected_d
                 player_ids = []
                 for name in selected_names:
-                    # Etsi ID
                     for p in forwards + defense:
                         full_name = f"{p['firstName']['default']} {p['lastName']['default']}"
                         if full_name in name:
@@ -186,91 +209,138 @@ elif page == "Luo joukkue":
                 success, msg = save_team(team_name, pin, player_ids)
                 if success:
                     st.success(msg)
+                    st.balloons()
+                    st.info(f"Team '{team_name}' created with {len(player_ids)} players!")
                 else:
                     st.error(msg)
 
-elif page == "Oma joukkue":
-    st.header("👤 Oma Joukkue")
+elif page == "My Team":
+    st.header("👤 View Your Team")
     
-    # Kirjautuminen
+    st.info("Log in with your team name and PIN to view your roster and points.")
+    
     with st.form("login_form"):
-        st.write("Login to view your team")
-        login_name = st.text_input("Team naem")
-        login_pin = st.text_input("PIN-code", type="password")
-        submit = st.form_submit_button("Log In")
+        col1, col2 = st.columns(2)
+        with col1:
+            login_name = st.text_input("Team Name", placeholder="Enter your team name")
+        with col2:
+            login_pin = st.text_input("PIN Code", type="password", placeholder="Enter your PIN")
+        submit = st.form_submit_button("🔓 Log In")
     
     if submit:
-        team = None
-        for t in get_all_teams():
-            if t["team_name"] == login_name:
-                team = t
-                break
-        
-        if not team:
-            st.error("Joukkuetta ei löydy!")
-        elif hash_pin(login_pin) != team.get("pin_hash", ""):
-            st.error("Väärä PIN-koodi!")
+        if not login_name or not login_pin:
+            st.error("Please enter both team name and PIN!")
         else:
-            st.success(f"Tervetuloa, {team['team_name']}!")
+            team = None
+            for t in get_all_teams():
+                if t["team_name"] == login_name:
+                    team = t
+                    break
             
-            # Hae pelaajien tiedot
-            st.subheader("Roster")
-            
-            all_players = get_nhl_stats()
-            stats_dict = {str(p["playerId"]): p for p in all_players}
-            
-            total_points = 0
-            
-            for pid in team.get("player_ids", []):
-                if pid in stats_dict:
-                    p = stats_dict[pid]
-                    points = calculate_points(p)
-                    total_points += points
+            if not team:
+                st.error("Team not found! Check your team name or create a new team.")
+            elif hash_pin(login_pin) != team.get("pin_hash", ""):
+                st.error("Incorrect PIN code! Please try again.")
+            else:
+                st.success(f"Welcome back, {team['team_name']}!")
+                
+                st.subheader("Team Roster")
+                
+                all_players = get_nhl_stats()
+                stats_dict = {str(p["playerId"]): p for p in all_players}
+                
+                total_points = 0
+                player_data = []
+                
+                for pid in team.get("player_ids", []):
+                    if pid in stats_dict:
+                        p = stats_dict[pid]
+                        points = calculate_points(p)
+                        total_points += points
+                        
+                        player_data.append({
+                            "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
+                            "Team": p['teamName']['default'],
+                            "Pos": p['position'],
+                            "Goals": p['goals'],
+                            "Assists": p['assists'],
+                            "Points": points
+                        })
+                
+                if player_data:
+                    df = pd.DataFrame(player_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.write(f"**{p['firstName']['default']} {p['lastName']['default']}**")
-                    with col2:
-                        st.write(f"{p['teamName']['default']} | {p['position']}")
-                    with col3:
-                        st.write(f"🎯 {p['goals']}M + {p['assists']}S = {points} pts")
+                    st.divider()
+                    cols = st.columns(3)
+                    with cols[1]:
+                        st.metric("Total Fantasy Points", total_points)
                 else:
-                    st.write(f"Pelaaja ID {pid} (ei tilastoja)")
-            
-            st.divider()
-            st.write(f"### Yhteensä: {total_points} pistettä")
+                    st.warning("No player data available.")
 
-elif page == "Sarjataulukko":
-    st.header("🏆 Sarjataulukko")
+elif page == "Leaderboard":
+    st.header("🏆 Tournament Leaderboard")
     
     teams = get_all_teams()
     if not teams:
-        st.info("Ei vielä joukkueita. Luo ensimmäinen joukkue!")
+        st.info("🏒 No teams registered yet. Be the first to create a team!")
     else:
-        # Laske pisteet
+        st.write(f"**{len(teams)} teams competing**")
+        
         stats = get_nhl_stats()
         stats_dict = {str(p["playerId"]): p for p in stats}
         
         leaderboard = []
         for team in teams:
             total = 0
-            player_names = []
+            player_count = 0
+            top_player = ""
+            top_points = 0
+            
             for pid in team.get("player_ids", []):
                 if pid in stats_dict:
                     p = stats_dict[pid]
                     pts = calculate_points(p)
                     total += pts
-                    player_names.append(f"{p['firstName']['default']} {p['lastName']['default']}: {pts}p")
+                    player_count += 1
+                    
+                    if pts > top_points:
+                        top_points = pts
+                        top_player = f"{p['firstName']['default']} {p['lastName']['default']}"
             
             leaderboard.append({
-                "Joukkue": team["team_name"],
-                "Pisteet": total,
-                "Pelaajat": ", ".join(player_names)
+                "Team": team["team_name"],
+                "Players": player_count,
+                "Top Scorer": top_player if top_player else "-",
+                "Fantasy Points": total
             })
         
-        # Järjestä ja näytä
-        df = pd.DataFrame(leaderboard).sort_values("Pisteet", ascending=False)
+        df = pd.DataFrame(leaderboard).sort_values("Fantasy Points", ascending=False)
         df.index = range(1, len(df)+1)
-        df.index.name = "Sija"
+        df.index.name = "Rank"
         
-        st.dataframe(df, use_container_width=True)
+        # Highlight top 3
+        def highlight_top3(row):
+            if row.name <= 3:
+                return ['background-color: gold'] * len(row)
+            return [''] * len(row)
+        
+        styled_df = df.style.apply(highlight_top3, axis=1)
+        st.dataframe(styled_df, use_container_width=True)
+        
+        # Show medals for top 3
+        if len(df) >= 3:
+            st.divider()
+            cols = st.columns(3)
+            medals = ["🥇", "🥈", "🥉"]
+            
+            for i in range(3):
+                with cols[i]:
+                    team = df.iloc[i]
+                    st.markdown(f"""
+                    <div style='text-align: center; padding: 20px; background-color: {"#FFD700" if i==0 else "#C0C0C0" if i==1 else "#CD7F32"}; border-radius: 10px;'>
+                        <div style='font-size: 3rem;'>{medals[i]}</div>
+                        <div style='font-size: 1.3rem; font-weight: bold;'>{team['Team']}</div>
+                        <div style='font-size: 1.1rem;'>{team['Fantasy Points']} points</div>
+                    </div>
+                    """, unsafe_allow_html=True)
