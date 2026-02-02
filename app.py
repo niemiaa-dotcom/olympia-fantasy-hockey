@@ -46,6 +46,10 @@ def get_nhl_stats():
         st.error(f"API-virhe: {e}")
         return []
 
+# --- DEBUG: Näytä API-vastaus ---
+players = get_nhl_stats()
+st.sidebar.write(f"Ladattu {len(players)} pelaajaa")  # Näytä määrä sivupalkissa
+
 def calculate_points(player):
     """Laske fantasy-pisteet"""
     goals = player.get("goals", 0)
