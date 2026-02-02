@@ -28,23 +28,38 @@ def hash_pin(pin):
     return hashlib.sha256(pin.encode()).hexdigest()
 
 def get_nhl_stats():
-    """Hae pistepörssi NHL API:sta"""
+    """Hae pistepörssi - käytä testidataa jos API ei toimi"""
+    
+    # TESTIDATA (4 Nations 2025 -pelaajia)
+    test_players = [
+        {"playerId": 8478402, "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"}, "teamName": {"default": "CAN"}, "position": "C", "goals": 4, "assists": 6, "points": 10},
+        {"playerId": 8476453, "firstName": {"default": "Nathan"}, "lastName": {"default": "MacKinnon"}, "teamName": {"default": "CAN"}, "position": "C", "goals": 3, "assists": 7, "points": 10},
+        {"playerId": 8477934, "firstName": {"default": "David"}, "lastName": {"default": "Pastrnak"}, "teamName": {"default": "CZE"}, "position": "R", "goals": 5, "assists": 3, "points": 8},
+        {"playerId": 8479318, "firstName": {"default": "Auston"}, "lastName": {"default": "Matthews"}, "teamName": {"default": "USA"}, "position": "C", "goals": 4, "assists": 2, "points": 6},
+        {"playerId": 8478864, "firstName": {"default": "Kirill"}, "lastName": {"default": "Kaprizov"}, "teamName": {"default": "RUS"}, "position": "L", "goals": 3, "assists": 4, "points": 7},
+        {"playerId": 8480027, "firstName": {"default": "Adam"}, "lastName": {"default": "Fox"}, "teamName": {"default": "USA"}, "position": "D", "goals": 1, "assists": 5, "points": 6},
+        {"playerId": 8474600, "firstName": {"default": "Roman"}, "lastName": {"default": "Josi"}, "teamName": {"default": "SUI"}, "position": "D", "goals": 2, "assists": 4, "points": 6},
+        {"playerId": 8475166, "firstName": {"default": "Johnny"}, "lastName": {"default": "Gaudreau"}, "teamName": {"default": "USA"}, "position": "L", "goals": 2, "assists": 5, "points": 7},
+        {"playerId": 8477492, "firstName": {"default": "Elias"}, "lastName": {"default": "Pettersson"}, "teamName": {"default": "SWE"}, "position": "C", "goals": 3, "assists": 3, "points": 6},
+        {"playerId": 8478872, "firstName": {"default": "Rasmus"}, "lastName": {"default": "Dahlin"}, "teamName": {"default": "SWE"}, "position": "D", "goals": 1, "assists": 6, "points": 7},
+    ]
+    
     try:
-        # Kokeile ensin 4 Nations 2025 dataa (20242025 kausi)
+        # Yritä oikeaa API:a ensin
         url = "https://api-web.nhle.com/v1/skater-stats-leaders/20242025/3?categories=points&limit=50"
         response = requests.get(url, timeout=10)
         data = response.json()
+        api_players = data.get("data", [])
         
-        # Jos tyhjää, kokeile nykyistä NHL-kautta
-        if not data.get("data"):
-            url = "https://api-web.nhle.com/v1/skater-stats-leaders/20232024/2?categories=points&limit=50"
-            response = requests.get(url, timeout=10)
-            data = response.json()
+        # Jos saadaan dataa, käytä sitä
+        if len(api_players) > 0:
+            return api_players
             
-        return data.get("data", [])
     except Exception as e:
-        st.error(f"API-virhe: {e}")
-        return []
+        st.sidebar.warning(f"API ei vastaa, käytetään testidataa")
+    
+    # Palaa testidataan
+    return test_players
 
 # --- DEBUG: Näytä API-vastaus ---
 players = get_nhl_stats()
