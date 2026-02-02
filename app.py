@@ -11,14 +11,27 @@ import pandas as pd
 st.set_page_config(page_title="Olympia Fantasy Hockey 2026", page_icon="🏒")
 
 # --- FIREBASE ALUSTUS ---
-@st.cache_resource
 def init_firebase():
     try:
         firebase_admin.get_app()
     except ValueError:
-        cred = credentials.Certificate(st.secrets["firebase"] if "firebase" in st.secrets else FIREBASE_CONFIG)
+        # Lue secrets erillisistä muuttujista (EI ["firebase"] -listaa)
+        cred_dict = {
+            "type": st.secrets.get("FIREBASE_TYPE", "service_account"),
+            "project_id": st.secrets["FIREBASE_PROJECT_ID"],
+            "private_key_id": st.secrets["FIREBASE_PRIVATE_KEY_ID"],
+            "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace("\\n", "\n"),
+            "client_email": st.secrets["FIREBASE_CLIENT_EMAIL"],
+            "client_id": st.secrets["FIREBASE_CLIENT_ID"],
+            "auth_uri": st.secrets.get("FIREBASE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
+            "token_uri": st.secrets.get("FIREBASE_TOKEN_URI", "https://oauth2.googleapis.com/token"),
+            "auth_provider_x509_cert_url": st.secrets.get("FIREBASE_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"),
+            "client_x509_cert_url": st.secrets["FIREBASE_CLIENT_X509_CERT_URL"],
+        }
+        cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
     return firestore.client()
+
 
 def get_db():
     return init_firebase()
