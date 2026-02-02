@@ -8,7 +8,7 @@ import requests
 import pandas as pd
 
 # --- SETTINGS ---
-st.set_page_config(page_title="Olympia Fantasy Hockey 2026", page_icon="🏒")
+st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="◯‍◯‍◯‍◯‍◯")
 
 # --- FIREBASE INITIALIZATION ---
 def init_firebase():
@@ -115,7 +115,7 @@ page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard"
 
 if page == "Home":
     st.write("""
-    ## Welcome to Olympia Fantasy Hockey 2026!
+    ## Welcome to Olympics Fantasy Hockey 2026!
     
     Compete with the Keeping Karlsson community by building your dream team 
     for the 2026 Winter Olympics hockey tournament.
