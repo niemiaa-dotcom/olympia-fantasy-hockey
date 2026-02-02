@@ -108,7 +108,7 @@ def get_all_teams():
     return teams
 
 # --- USER INTERFACE ---
-st.title("🏒 Olympia Fantasy Hockey 2026")
+st.title("◯‍◯‍◯‍◯‍◯ Olympics Fantasy Hockey 2026")
 st.caption("Keeping Karlsson Community Fantasy Game")
 
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard"])
