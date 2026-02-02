@@ -117,8 +117,9 @@ def get_all_teams():
 st.title("🏒 Olympia Fantasy Hockey 2026")
 st.caption("Keeping Karlsson -yhteisön fantasy-peli")
 
+
 # Sivun valinta
-page = st.sidebar.radio("Valikko", ["Etusivu", "Luo joukkue", "Sarjataulukko"])
+page = st.sidebar.radio("Valikko", ["Etusivu", "Luo joukkue", "Oma joukkue", "Sarjataulukko"])
 
 if page == "Etusivu":
     st.write("""
@@ -187,6 +188,57 @@ elif page == "Luo joukkue":
                     st.success(msg)
                 else:
                     st.error(msg)
+
+elif page == "Oma joukkue":
+    st.header("👤 Oma Joukkue")
+    
+    # Kirjautuminen
+    with st.form("login_form"):
+        st.write("Kirjaudu nähdäksesi joukkueesi")
+        login_name = st.text_input("Joukkueen nimi")
+        login_pin = st.text_input("PIN-koodi", type="password")
+        submit = st.form_submit_button("Kirjaudu")
+    
+    if submit:
+        team = None
+        for t in get_all_teams():
+            if t["team_name"] == login_name:
+                team = t
+                break
+        
+        if not team:
+            st.error("Joukkuetta ei löydy!")
+        elif hash_pin(login_pin) != team.get("pin_hash", ""):
+            st.error("Väärä PIN-koodi!")
+        else:
+            st.success(f"Tervetuloa, {team['team_name']}!")
+            
+            # Hae pelaajien tiedot
+            st.subheader("Kokoonpano")
+            
+            all_players = get_nhl_stats()
+            stats_dict = {str(p["playerId"]): p for p in all_players}
+            
+            total_points = 0
+            
+            for pid in team.get("player_ids", []):
+                if pid in stats_dict:
+                    p = stats_dict[pid]
+                    points = calculate_points(p)
+                    total_points += points
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"**{p['firstName']['default']} {p['lastName']['default']}**")
+                    with col2:
+                        st.write(f"{p['teamName']['default']} | {p['position']}")
+                    with col3:
+                        st.write(f"🎯 {p['goals']}M + {p['assists']}S = {points} pts")
+                else:
+                    st.write(f"Pelaaja ID {pid} (ei tilastoja)")
+            
+            st.divider()
+            st.write(f"### Yhteensä: {total_points} pistettä")
 
 elif page == "Sarjataulukko":
     st.header("🏆 Sarjataulukko")
