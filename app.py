@@ -480,7 +480,6 @@ if 'confirm_delete' not in st.session_state:
     st.session_state['confirm_delete'] = False
 
 if page == "🏠 Home":
-    st.markdown("# 🏒 Olympics Fantasy Hockey 2026")
     st.markdown("### *Build your dream team from 12 Olympic nations!*")
     
     # Deadline countdown
