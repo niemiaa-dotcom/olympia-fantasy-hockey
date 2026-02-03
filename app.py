@@ -765,20 +765,20 @@ elif page == "Create Team":
             errors.append(f"Must select exactly 8 Forwards (Selected: {stats_counts['F']}).")
         if len(countries_selected) != 12:
             errors.append(f"Must select exactly one player from each of the 12 countries (Selected from: {len(countries_selected)}).")
-            
-            if errors:
-                for e in errors:
-                    st.error(e)
+        
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
+            if success:
+                # Tyhjennä valinnat
+                st.session_state['temp_selections'] = {}
+                st.balloons()
+                st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
+                st.info("Go to 'My Team' to view your roster!")
             else:
-                success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
-                if success:
-                    # Tyhjennä valinnat
-                    st.session_state['temp_selections'] = {}
-                    st.balloons()
-                    st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
-                    st.info("Go to 'My Team' to view your roster!")
-                else:
-                    st.error(msg)
+                st.error(msg)
     
     # --- LEADERBOARD SIVU ---
 elif page == "Leaderboard":
