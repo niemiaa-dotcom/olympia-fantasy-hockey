@@ -407,7 +407,7 @@ elif page == "Create Team":
     # ... (sama kuin ennen, mutta korjattu checkbox-key)
     st.header("📝 Create Your Olympic Roster")
     
-    with st.expander("ℹ️ Rules", expanded=True):
+with st.expander("ℹ️ Rules", expanded=True):
     st.write("""
     ### Olympics Fantasy Hockey 2026! 🏒
     
