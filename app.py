@@ -25,7 +25,6 @@ COUNTRY_FLAGS = {
     "SWE": "🇸🇪", "SUI": "🇨🇭", "UKR": "🇺🇦", "USA": "🇺🇸", "OTHERS": "🌍"
 }
 
-# Olympics participants + major countries
 ALL_COUNTRIES = {
     "AUS": "Australia", "AUT": "Austria", "BEL": "Belgium", "BRA": "Brazil",
     "CAN": "Canada", "CHN": "China", "CZE": "Czechia", "DEN": "Denmark",
@@ -42,11 +41,9 @@ OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT",
                  "SVK", "SWE", "SUI", "USA"]
 
 def get_flag(code):
-    """Return emoji flag for country code"""
     return COUNTRY_FLAGS.get(code, "🏒")
 
 def get_country_display(code):
-    """Return formatted country with flag and name"""
     flag = get_flag(code)
     name = ALL_COUNTRIES.get(code, code)
     return f"{flag} {name}"
@@ -81,13 +78,11 @@ def get_db():
 def clean_name(name):
     """
     Normalisoi nimen: poistaa erikoismerkit, muuttaa pieniksi kirjaimiksi,
-    poistaa välilyönnit ja alaviivat (jotta "Tomas Hertl" → "tomashertl")
+    poistaa välilyönnit ja alaviivat
     """
     if not name: 
         return ""
-    # Normalisoi ääkköset (Stützle → Stutzle)
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
-    # Pienet kirjaimet, poista välilyönnit ja alaviivat
     return n.lower().strip().replace(" ", "").replace("_", "")
 
 @st.cache_data(ttl=60)
@@ -97,11 +92,6 @@ def fetch_live_scoring_by_name():
     live_stats = {}
     
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
-    
-    # Debug-laskurit
-    games_found = 0
-    tournament_games_found = 0
-    debug_logs = []
     
     for date_str in dates:
         if date_str > datetime.now().strftime('%Y-%m-%d'):
@@ -125,10 +115,7 @@ def fetch_live_scoring_by_name():
                 away_abbr = game.get('awayTeam', {}).get('abbrev')
                 home_abbr = game.get('homeTeam', {}).get('abbrev')
                 
-                # 4 Nations = 19, Olympics = 9
                 if game_type in [9, 19]:
-                    tournament_games_found += 1
-                    
                     box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
                     
                     try:
@@ -147,15 +134,10 @@ def fetch_live_scoring_by_name():
                                         ln = p.get('lastName', {}).get('default', '')
                                         full_name = f"{fn} {ln}"
                                     
-                                    # Käytä samaa clean_name-funktiota kuin CSV:ssä
                                     key = f"{clean_name(full_name)}_{clean_name(country_code)}"
                                     
                                     goals = int(p.get('goals', 0))
                                     assists = int(p.get('assists', 0))
-                                    
-                                    # Debug: kerää ensimmäiset 5 avainta
-                                    if len(debug_logs) < 5 and (goals > 0 or assists > 0):
-                                        debug_logs.append(f"API: {full_name} ({country_code}) → {key} [G:{goals} A:{assists}]")
                                     
                                     if key not in live_stats:
                                         live_stats[key] = {'goals': 0, 'assists': 0}
@@ -169,11 +151,6 @@ def fetch_live_scoring_by_name():
         except Exception:
             continue
     
-    # Tallenna debug-tiedot
-    st.session_state['api_debug_logs'] = debug_logs
-    st.session_state['api_total_players'] = len(live_stats)
-    st.session_state['tournament_games'] = tournament_games_found
-    
     return live_stats
 
 
@@ -185,7 +162,6 @@ def get_all_players_data():
         base_roster = df.to_dict('records')
         csv_loaded = True
     except Exception as e:
-        # Fallback test data
         base_roster = [
             {"firstName": "Connor", "lastName": "McDavid", "teamName": "CAN", "position": "F"},
             {"firstName": "Nathan", "lastName": "MacKinnon", "teamName": "CAN", "position": "F"},
@@ -209,46 +185,56 @@ def get_all_players_data():
         ]
         csv_loaded = False
 
-    # Hae live-pisteet
     live_scores = fetch_live_scoring_by_name()
     
-    # Debug: vertaile avaimia
+    # DEBUG: Kerää kaikki CSV-avaimet
+    csv_keys = []
+    for player in base_roster[:20]:  # Ensimmäiset 20
+        f_name = str(player['firstName'])
+        l_name = str(player['lastName'])
+        country = str(player['teamName'])
+        full_name = f"{f_name} {l_name}"
+        key = f"{clean_name(full_name)}_{clean_name(country)}"
+        csv_keys.append({
+            'name': full_name,
+            'country': country,
+            'key': key
+        })
+    
+    # DEBUG: Vertaa suoraan
+    api_keys = list(live_scores.keys())
+    
+    # Etsi täsmäävät
+    matches = []
+    for csv_item in csv_keys:
+        if csv_item['key'] in api_keys:
+            matches.append(csv_item['key'])
+    
+    # DEBUG: Yritä manuaalista täsmäystä ilman clean_namea
+    manual_check = []
+    for api_key in api_keys[:10]:
+        # Oletus: API-avain on muotoa "etunimi_sukunimi_maa" tai "etunimi sukunimi_maa"
+        parts = api_key.rsplit('_', 1)  # Erota viimeisin _maatunnus
+        if len(parts) == 2:
+            name_part, country_part = parts
+            manual_check.append({
+                'api_key': api_key,
+                'name_part': name_part,
+                'country_part': country_part,
+                'stats': live_scores[api_key]
+            })
+    
     debug_info = {
         "csv_loaded": csv_loaded,
         "csv_players": len(base_roster),
         "api_players_with_stats": len(live_scores),
-        "api_sample_keys": list(live_scores.keys())[:10],
-        "key_comparison": []
+        "csv_sample_keys": csv_keys[:10],
+        "api_sample_keys": api_keys[:10],
+        "matches_found": len(matches),
+        "matches": matches[:5],
+        "manual_check": manual_check
     }
     
-    # Testaa tiettyjä pelaajia
-    test_players = [
-        ("Tomas", "Hertl", "CZE"),
-        ("Rasmus", "Andersson", "SWE"),
-        ("Victor", "Hedman", "SWE"),
-        ("Bo", "Horvat", "CAN"),
-        ("Connor", "McDavid", "CAN"),
-    ]
-    
-    for fn, ln, country in test_players:
-        # Vanha tyyli (väärä?)
-        old_key = f"{fn.lower()} {ln.lower()}_{country.lower()}"
-        # Uusi tyyli (clean_name)
-        new_key = f"{clean_name(fn + ' ' + ln)}_{clean_name(country)}"
-        
-        found_old = old_key in live_scores
-        found_new = new_key in live_scores
-        
-        debug_info["key_comparison"].append({
-            "name": f"{fn} {ln}",
-            "country": country,
-            "old_key": old_key,
-            "new_key": new_key,
-            "found": found_new,
-            "stats": live_scores.get(new_key, None)
-        })
-    
-    # Rakenna final_list ja laske täsmäävät
     matched_players = 0
     total_points = 0
     sample_matches = []
@@ -260,7 +246,6 @@ def get_all_players_data():
         country = str(player['teamName'])
         pos = str(player['position'])
         
-        # Käytä samaa logiikkaa kuin API:ssa
         full_name = f"{f_name} {l_name}"
         search_key = f"{clean_name(full_name)}_{clean_name(country)}"
         
@@ -287,7 +272,6 @@ def get_all_players_data():
     debug_info["total_points"] = total_points
     debug_info["sample_matches"] = sample_matches
     
-    # Tallenna session stateen
     st.session_state['player_data_debug'] = debug_info
     
     return final_list
@@ -332,11 +316,9 @@ def get_all_teams():
     return teams
 
 def get_country_leaderboard():
-    """Calculate country leaderboard with 'Others' grouping"""
     teams = get_all_teams()
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
     
-    # Collect all points by manager's country
     country_points = defaultdict(list)
     
     for team in teams:
@@ -347,7 +329,6 @@ def get_country_leaderboard():
                 total += player_map[pid]['points']
         country_points[manager_country].append(total)
     
-    # Group small countries (<=3 managers) into OTHERS
     final_stats = defaultdict(lambda: {"points": [], "managers": 0, "countries": []})
     
     for country, points_list in country_points.items():
@@ -360,7 +341,6 @@ def get_country_leaderboard():
             final_stats[country]["managers"] = len(points_list)
             final_stats[country]["countries"] = [country]
     
-    # Calculate averages
     results = []
     for group_code, data in final_stats.items():
         if data["managers"] > 0:
@@ -380,7 +360,6 @@ def get_country_leaderboard():
 
 # --- REFRESH UTILITIES ---
 def clear_all_cache():
-    """Clear all cached data functions"""
     try:
         fetch_live_scoring_by_name.clear()
         get_all_players_data.clear()
@@ -389,15 +368,11 @@ def clear_all_cache():
         st.error(f"Error clearing cache: {e}")
         return False
 
-
-
 # --- UI ---
 st.title("🏒 Olympics Fantasy Hockey 2025")
 st.caption("Keeping Karlsson Community Fantasy Game")
 
 PLAYERS_DATA = get_all_players_data()
-
-    
 
 with st.sidebar:
     st.divider()
@@ -409,51 +384,46 @@ with st.sidebar:
                 st.success("Cache cleared! Reloading...")
                 st.rerun()
     
-    if st.checkbox("🔍 Show Debug Info", value=False):
-        # API Debug
-        if 'api_debug_logs' in st.session_state:
-            st.text("API Sample Keys (with points):")
-            for log in st.session_state['api_debug_logs']:
-                st.code(log, language="text")
-        
-        if 'tournament_games' in st.session_state:
-            st.text(f"Tournament games found: {st.session_state['tournament_games']}")
-        
-        # Player Data Debug
+    if st.checkbox("🔍 Show Debug Info", value=True):  # Oletuksena päällä!
         if 'player_data_debug' in st.session_state:
             d = st.session_state['player_data_debug']
             
-            st.divider()
-            st.text("DATA SUMMARY:")
+            st.text("SUMMARY:")
             st.text(f"📁 CSV loaded: {d['csv_loaded']}")
             st.text(f"👥 CSV players: {d['csv_players']}")
             st.text(f"📡 API players: {d['api_players_with_stats']}")
-            st.text(f"✅ Matched: {d['matched_in_roster']}")
-            st.text(f"📊 Total pts: {d['total_points']}")
+            st.text(f"✅ Matches found: {d['matches_found']}")
             
-            # Key comparison
             st.divider()
-            st.text("KEY COMPARISON:")
-            for comp in d['key_comparison']:
-                status = "✅" if comp['found'] else "❌"
-                st.text(f"{status} {comp['name']} ({comp['country']})")
-                st.text(f"   Key: {comp['new_key']}")
-                if comp['stats']:
-                    st.text(f"   Stats: {comp['stats']['goals']}G {comp['stats']['assists']}A")
+            st.text("CSV SAMPLE KEYS (first 10):")
+            for item in d['csv_sample_keys']:
+                st.code(f"{item['name']} ({item['country']}) → {item['key']}")
             
-            # Sample API keys
             st.divider()
-            st.text("API SAMPLE KEYS:")
-            for key in d['api_sample_keys'][:5]:
-                st.code(key, language="text")
+            st.text("API SAMPLE KEYS (first 10):")
+            for key in d['api_sample_keys']:
+                st.code(key)
+            
+            if d['matches']:
+                st.divider()
+                st.text("MATCHING KEYS:")
+                for match in d['matches']:
+                    st.success(match)
+            
+            if d['manual_check']:
+                st.divider()
+                st.text("MANUAL API CHECK:")
+                for item in d['manual_check']:
+                    st.text(f"Key: {item['api_key']}")
+                    st.text(f"  Name: {item['name_part']}")
+                    st.text(f"  Country: {item['country_part']}")
+                    st.text(f"  Stats: {item['stats']}")
             
             if d['sample_matches']:
                 st.divider()
-                st.text("🌟 MATCHES FOUND:")
+                st.text("🌟 MATCHES WITH POINTS:")
                 for match in d['sample_matches']:
                     st.text(match)
-            else:
-                st.warning("No matches found!")
 
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
 
@@ -463,7 +433,7 @@ if page == "Home":
     
     ### New: Countries Competition! 🌍
     Managers compete not only individually but also for their country's honor!
-    Countries with 4+ managers appear separately. Smaller countries are grouped as "Others".
+    Countries with 4+ managers appear separately. Smaller countries grouped as "Others".
     
     ### Scoring
     | Action | Points |
@@ -482,12 +452,10 @@ elif page == "Create Team":
         - Select your **manager nationality** for country competition!
         """)
 
-    # Team info outside form for better UX
     col1, col2 = st.columns(2)
     team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
     pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits", key="pin_input")
     
-    # MANAGER COUNTRY SELECTION
     st.subheader("🌍 Manager Nationality")
     
     col_flag, col_select = st.columns([1, 4])
@@ -506,7 +474,6 @@ elif page == "Create Team":
     st.divider()
     st.subheader("Select Players by Country")
     
-    # Data prep
     players_by_country = {}
     for p in PLAYERS_DATA:
         country = p['teamName']['default']
@@ -522,7 +489,6 @@ elif page == "Create Team":
     sorted_countries = sorted(players_by_country.keys())
     selected_player_ids = []
     
-    # Render with flags
     for country in sorted_countries:
         flag = get_flag(country)
         is_olympic = country in OLYMPIC_TEAMS
@@ -545,7 +511,6 @@ elif page == "Create Team":
                     if st.checkbox(label, key=f"chk_{p['playerId']}"):
                         selected_player_ids.append(p['playerId'])
 
-    # REAL-TIME Validation
     stats_counts = {'F': 0, 'D': 0}
     country_counts = {}
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
@@ -557,7 +522,6 @@ elif page == "Create Team":
         ctry = p['teamName']['default']
         country_counts[ctry] = country_counts.get(ctry, 0) + 1
 
-    # Status display
     st.divider()
     st.subheader("Draft Status")
     
@@ -574,7 +538,6 @@ elif page == "Create Team":
     else:
         s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
 
-    # Save button
     st.divider()
     submit = st.button("💾 Save Team", type="primary", key="save_team_btn")
     
@@ -661,7 +624,6 @@ elif page == "My Team":
 elif page == "Leaderboard":
     st.header("🏆 Individual Leaderboard")
 
-    # --- CACHE CLEAR & REFRESH ---
     col1, col2 = st.columns([3, 1])
     with col2:
         if st.button("🔄 Refresh Data", type="secondary", help="Force refresh from NHL API"):
