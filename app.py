@@ -301,100 +301,103 @@ elif page == "Create Team":
         - Select your **manager nationality** for country competition!
         """)
 
-    with st.form("team_form"):
-        col1, col2 = st.columns(2)
-        team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
-        pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits")
+    # Team info outside form for better UX
+    col1, col2 = st.columns(2)
+    team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
+    pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits", key="pin_input")
+    
+    # MANAGER COUNTRY SELECTION
+    st.subheader("🌍 Manager Nationality")
+    
+    col_flag, col_select = st.columns([1, 4])
+    
+    with col_select:
+        manager_country = st.selectbox(
+            "Select your country",
+            options=list(ALL_COUNTRIES.keys()),
+            format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}",
+            key="manager_country_select"
+        )
+    
+    with col_flag:
+        st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
+    
+    st.divider()
+    st.subheader("Select Players by Country")
+    
+    # Data prep
+    players_by_country = {}
+    for p in PLAYERS_DATA:
+        country = p['teamName']['default']
+        if country not in players_by_country:
+            players_by_country[country] = {'F': [], 'D': []}
         
-        # MANAGER COUNTRY SELECTION
-        st.subheader("🌍 Manager Nationality")
+        pos = p['position']
+        if pos in ['C', 'L', 'R', 'F']:
+            players_by_country[country]['F'].append(p)
+        elif pos == 'D':
+            players_by_country[country]['D'].append(p)
+
+    sorted_countries = sorted(players_by_country.keys())
+    selected_player_ids = []
+    
+    # Render with flags
+    for country in sorted_countries:
+        flag = get_flag(country)
+        is_olympic = country in OLYMPIC_TEAMS
+        olympic_badge = "🏒" if is_olympic else ""
         
-        col_flag, col_select = st.columns([1, 4])
-        
-        with col_select:
-            manager_country = st.selectbox(
-                "Select your country",
-                options=list(ALL_COUNTRIES.keys()),
-                format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}"
-            )
-        
-        with col_flag:
-            st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
-        
-        st.divider()
-        st.subheader("Select Players by Country")
-        
-        # Data prep
-        players_by_country = {}
-        for p in PLAYERS_DATA:
-            country = p['teamName']['default']
-            if country not in players_by_country:
-                players_by_country[country] = {'F': [], 'D': []}
+        with st.expander(f"{flag} {country} {olympic_badge}"):
+            col_f, col_d = st.columns(2)
             
-            pos = p['position']
-            if pos in ['C', 'L', 'R', 'F']:
-                players_by_country[country]['F'].append(p)
-            elif pos == 'D':
-                players_by_country[country]['D'].append(p)
+            with col_f:
+                st.markdown("**Forwards**")
+                for p in players_by_country[country]['F']:
+                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                    if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                        selected_player_ids.append(p['playerId'])
+                        
+            with col_d:
+                st.markdown("**Defensemen**")
+                for p in players_by_country[country]['D']:
+                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                    if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                        selected_player_ids.append(p['playerId'])
 
-        sorted_countries = sorted(players_by_country.keys())
-        selected_player_ids = []
-        
-        # Render with flags
-        for country in sorted_countries:
-            flag = get_flag(country)
-            is_olympic = country in OLYMPIC_TEAMS
-            olympic_badge = "🏒" if is_olympic else ""
-            
-            with st.expander(f"{flag} {country} {olympic_badge}"):
-                col_f, col_d = st.columns(2)
-                
-                with col_f:
-                    st.markdown("**Forwards**")
-                    for p in players_by_country[country]['F']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
-                            
-                with col_d:
-                    st.markdown("**Defensemen**")
-                    for p in players_by_country[country]['D']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
+    # REAL-TIME Validation - päivittyy jokaisen valinnan jälkeen!
+    stats_counts = {'F': 0, 'D': 0}
+    country_counts = {}
+    player_map = {p['playerId']: p for p in PLAYERS_DATA}
+    
+    for pid in selected_player_ids:
+        p = player_map[pid]
+        pos = 'D' if p['position'] == 'D' else 'F'
+        stats_counts[pos] += 1
+        ctry = p['teamName']['default']
+        country_counts[ctry] = country_counts.get(ctry, 0) + 1
 
-        # Validation
-        stats_counts = {'F': 0, 'D': 0}
-        country_counts = {}
-        player_map = {p['playerId']: p for p in PLAYERS_DATA}
-        
-        for pid in selected_player_ids:
-            p = player_map[pid]
-            pos = 'D' if p['position'] == 'D' else 'F'
-            stats_counts[pos] += 1
-            ctry = p['teamName']['default']
-            country_counts[ctry] = country_counts.get(ctry, 0) + 1
+    # Status display - NYT PÄIVITTYY REAALIAJASSA!
+    st.divider()
+    st.subheader("Draft Status")
+    
+    s1, s2, s3 = st.columns(3)
+    f_color = "green" if stats_counts['F'] == 7 else "red"
+    s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
+    
+    d_color = "green" if stats_counts['D'] == 3 else "red"
+    s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
+    
+    violation_countries = [c for c, count in country_counts.items() if count > 1]
+    if not violation_countries:
+        s3.markdown("1-Player/Nation: :green[**OK**]")
+    else:
+        s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
 
-        # Status display
-        st.divider()
-        st.subheader("Draft Status")
-        
-        s1, s2, s3 = st.columns(3)
-        f_color = "green" if stats_counts['F'] == 7 else "red"
-        s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
-        
-        d_color = "green" if stats_counts['D'] == 3 else "red"
-        s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
-        
-        violation_countries = [c for c, count in country_counts.items() if count > 1]
-        if not violation_countries:
-            s3.markdown("1-Player/Nation: :green[**OK**]")
-        else:
-            s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
-
-        submit = st.form_submit_button("💾 Save Team", type="primary")
-        
-        if submit:
+    # Save button
+    st.divider()
+    submit = st.button("💾 Save Team", type="primary", key="save_team_btn")
+    
+    if submit:
             errors = []
             
             if not team_name:
@@ -538,4 +541,3 @@ elif page == "Countries":
                         <div style='font-size: 0.9rem;'>({stats['managers']} managers)</div>
                     </div>
                     """, unsafe_allow_html=True)
-
