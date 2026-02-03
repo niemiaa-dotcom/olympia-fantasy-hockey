@@ -1,7 +1,7 @@
 
 # Luodaan päivitetty koodi lipuilla
 
-app_with_flags = '''import streamlit as st
+import streamlit as st
 import hashlib
 import json
 from datetime import datetime
