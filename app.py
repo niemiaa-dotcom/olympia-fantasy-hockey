@@ -474,7 +474,9 @@ elif page == "Leaderboard":
     all_teams = get_all_teams()
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
     
+    # Build rankings with team data
     rankings = []
+    teams_dict = {}  # Store full team data for lookup
     
     for team in all_teams:
         t_points = 0
@@ -483,16 +485,72 @@ elif page == "Leaderboard":
                 t_points += player_map[pid]['points']
         
         manager_country = team.get("manager_country", "UNK")
+        team_name = team['team_name']
         
         rankings.append({
-            "Team": team['team_name'],
+            "Team": team_name,
             "Manager Country": f"{get_flag(manager_country)} {ALL_COUNTRIES.get(manager_country, manager_country)}",
             "Points": t_points
         })
+        
+        # Store team data for later lookup
+        teams_dict[team_name] = team
     
+    # Display leaderboard
     df = pd.DataFrame(rankings).sort_values("Points", ascending=False).reset_index(drop=True)
     df.index += 1
     st.dataframe(df, use_container_width=True)
+    
+    # Team roster viewer
+    st.divider()
+    st.subheader("👥 View Team Roster")
+    
+    if rankings:
+        # Create a dropdown with teams sorted by points
+        team_names = [r["Team"] for r in sorted(rankings, key=lambda x: x["Points"], reverse=True)]
+        
+        selected_team = st.selectbox(
+            "Select a team to view their roster:",
+            options=team_names,
+            format_func=lambda x: f"{x} ({next(r['Points'] for r in rankings if r['Team'] == x)} pts)"
+        )
+        
+        if selected_team:
+            team_data = teams_dict[selected_team]
+            manager_country = team_data.get("manager_country", "UNK")
+            
+            st.markdown(f"### {selected_team}")
+            st.markdown(f"**Manager:** {get_flag(manager_country)} {ALL_COUNTRIES.get(manager_country, manager_country)}")
+            
+            # Build roster table
+            team_roster = []
+            total_pts = 0
+            
+            for pid in team_data.get('player_ids', []):
+                if pid in player_map:
+                    p = player_map[pid]
+                    flag = get_flag(p['teamName']['default'])
+                    team_roster.append({
+                        "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
+                        "Pos": p['position'],
+                        "Country": f"{flag} {p['teamName']['default']}",
+                        "G": p['goals'],
+                        "A": p['assists'],
+                        "FP": p['points']
+                    })
+                    total_pts += p['points']
+            
+            # Display roster
+            roster_df = pd.DataFrame(team_roster)
+            st.dataframe(roster_df, use_container_width=True, hide_index=True)
+            
+            # Show total points
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Points", total_pts)
+            col2.metric("Forwards", len([r for r in team_roster if r['Pos'] in ['C', 'L', 'R', 'F']]))
+            col3.metric("Defensemen", len([r for r in team_roster if r['Pos'] == 'D']))
+    else:
+        st.info("No teams registered yet!")
 
 elif page == "Countries":
     st.header("🌍 Countries Competition")
