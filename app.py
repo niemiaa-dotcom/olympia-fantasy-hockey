@@ -333,7 +333,6 @@ def clear_all_cache():
 
 # --- UI ---
 st.title("🏒 Olympics Fantasy Hockey 2025")
-st.caption("Keeping Karlsson Community Fantasy Game")
 
 PLAYERS_DATA = get_all_players_data()
 
@@ -347,47 +346,41 @@ with st.sidebar:
                 st.success("Cache cleared! Reloading...")
                 st.rerun()
     
-    if st.checkbox("🔍 Show Debug Info", value=True):  # Oletuksena päällä!
+    if st.checkbox("🔍 Show Debug Info", value=True):
         if 'player_data_debug' in st.session_state:
             d = st.session_state['player_data_debug']
             
             st.text("SUMMARY:")
-            st.text(f"📁 CSV loaded: {d['csv_loaded']}")
-            st.text(f"👥 CSV players: {d['csv_players']}")
-            st.text(f"📡 API players: {d['api_players_with_stats']}")
-            st.text(f"✅ Matches found: {d['matches_found']}")
-            
-            st.divider()
-            st.text("CSV SAMPLE KEYS (first 10):")
-            for item in d['csv_sample_keys']:
-                st.code(f"{item['name']} ({item['country']}) → {item['key']}")
+            st.text(f"📁 CSV loaded: {d.get('csv_loaded', 'N/A')}")
+            st.text(f"👥 CSV players: {d.get('csv_players', 0)}")
+            st.text(f"📡 API players: {d.get('api_players_with_stats', 0)}")
+            st.text(f"✅ Matched: {d.get('matched_in_roster', 0)}")  # Käytä get() metodia
+            st.text(f"📊 Total pts: {d.get('total_points', 0)}")
             
             st.divider()
             st.text("API SAMPLE KEYS (first 10):")
-            for key in d['api_sample_keys']:
+            for key in d.get('api_sample_keys', [])[:10]:
                 st.code(key)
             
-            if d['matches']:
+            if d.get('debug_comparison'):
                 st.divider()
-                st.text("MATCHING KEYS:")
-                for match in d['matches']:
-                    st.success(match)
+                st.text("KEY COMPARISON:")
+                for comp in d['debug_comparison'][:5]:
+                    status = "✅" if comp.get('found') else "❌"
+                    st.text(f"{status} {comp.get('name')} ({comp.get('country')})")
+                    st.text(f"   Short: {comp.get('short_key')}")
+                    if comp.get('found'):
+                        st.text(f"   Stats: {comp.get('stats', {})}")
             
-            if d['manual_check']:
-                st.divider()
-                st.text("MANUAL API CHECK:")
-                for item in d['manual_check']:
-                    st.text(f"Key: {item['api_key']}")
-                    st.text(f"  Name: {item['name_part']}")
-                    st.text(f"  Country: {item['country_part']}")
-                    st.text(f"  Stats: {item['stats']}")
-            
-            if d['sample_matches']:
+            if d.get('sample_matches'):
                 st.divider()
                 st.text("🌟 MATCHES WITH POINTS:")
                 for match in d['sample_matches']:
                     st.text(match)
-
+            else:
+                st.warning("No matches found!")
+        else:
+            st.info("No debug data available. Refresh to load.")
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
 
 if page == "Home":
