@@ -1,4 +1,7 @@
-import streamlit as st
+
+# Luodaan päivitetty koodi lipuilla
+
+app_with_flags = '''import streamlit as st
 import hashlib
 import json
 from datetime import datetime
@@ -11,12 +14,50 @@ import unicodedata
 # --- SETTINGS ---
 st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
 
+# --- FLAG MAPPING ---
+COUNTRY_FLAGS = {
+    "CAN": "🇨🇦",
+    "USA": "🇺🇸", 
+    "SWE": "🇸🇪",
+    "FIN": "🇫🇮",
+    "CZE": "🇨🇿",
+    "SUI": "🇨🇭",
+    "GER": "🇩🇪",
+    "DEN": "🇩🇰",
+    "LAT": "🇱🇻",
+    "SVK": "🇸🇰",
+    "FRA": "🇫🇷",
+    "ITA": "🇮🇹",
+    "NOR": "🇳🇴",
+    "AUT": "🇦🇹",
+    "SLO": "🇸🇮",
+    # Fallback for full names
+    "CANADA": "🇨🇦",
+    "UNITED STATES": "🇺🇸",
+    "SWEDEN": "🇸🇪",
+    "FINLAND": "🇫🇮",
+    "CZECHIA": "🇨🇿",
+    "SWITZERLAND": "🇨🇭",
+    "GERMANY": "🇩🇪",
+    "DENMARK": "🇩🇰",
+    "LATVIA": "🇱🇻",
+    "SLOVAKIA": "🇸🇰",
+    "FRANCE": "🇫🇷",
+    "ITALY": "🇮🇹",
+    "NORWAY": "🇳🇴",
+    "AUSTRIA": "🇦🇹",
+    "SLOVENIA": "🇸🇮"
+}
+
+def get_flag(country_code):
+    """Get flag emoji for country"""
+    return COUNTRY_FLAGS.get(country_code.upper(), "🏒")
+
 # --- FIREBASE INITIALIZATION ---
 def init_firebase():
     try:
         firebase_admin.get_app()
     except ValueError:
-        # Hae salaisuudet .streamlit/secrets.toml tiedostosta
         if "FIREBASE_PROJECT_ID" not in st.secrets:
             st.error("Firebase secrets missing!")
             return None
@@ -43,7 +84,7 @@ def get_db():
 # --- DATA PROCESSING FUNCTIONS ---
 
 def clean_name(name):
-    """Siivoaa nimen vertailua varten (esim. Stützle -> stutzle)."""
+    """Siivoaa nimen vertailua varten"""
     if not name: return ""
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
     return n.lower().strip()
@@ -51,13 +92,11 @@ def clean_name(name):
 @st.cache_data(ttl=300)
 def fetch_live_scoring_by_name():
     """Hakee pisteet APIsta ja tallentaa ne avaimella 'nimi_maa'."""
-    # Kisojen aikataulu
     start_date = "2026-02-12"
     end_date = "2026-02-22"
     
     live_stats = {} 
     
-    # Jos kisat eivät ole alkaneet, palautetaan tyhjä (nopeuttaa latausta)
     if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
         return {}
 
@@ -73,7 +112,7 @@ def fetch_live_scoring_by_name():
             day_data = next((d for d in r.get('gameWeek', []) if d['date'] == date_str), None)
             if day_data:
                 for game in day_data.get('games', []):
-                    if game.get('gameType') == 9: # Olympiapeli
+                    if game.get('gameType') == 9:
                         
                         away_abbr = game.get('awayTeam', {}).get('abbrev')
                         home_abbr = game.get('homeTeam', {}).get('abbrev')
@@ -92,7 +131,6 @@ def fetch_live_scoring_by_name():
                                         ln = p.get('lastName', {}).get('default', '')
                                         full_name = f"{fn} {ln}"
                                     
-                                    # YKSILÖIVÄ AVAIN
                                     key = f"{clean_name(full_name)}_{clean_name(country_code)}"
                                     
                                     goals = int(p.get('goals', 0))
@@ -110,16 +148,11 @@ def fetch_live_scoring_by_name():
 
 @st.cache_data(ttl=60)
 def get_all_players_data():
-    """
-    PÄÄFUNKTIO: Lataa pelaajat CSV:stä ja yhdistää live-pisteet.
-    Korvaa vanhan 'get_nhl_stats' funktion.
-    """
+    """PÄÄFUNKTIO: Lataa pelaajat CSV:stä ja yhdistää live-pisteet."""
     try:
-        # Luetaan CSV
         df = pd.read_csv("olympic_players.csv")
         base_roster = df.to_dict('records')
     except Exception as e:
-        # FALLBACK TEST DATA (Jos CSV puuttuu)
         st.warning("Pelaajalistaa (CSV) ei löytynyt, käytetään testidataa.")
         base_roster = [
             {"firstName": "Connor", "lastName": "McDavid", "teamName": "CAN", "position": "F"},
@@ -127,7 +160,6 @@ def get_all_players_data():
             {"firstName": "Cale", "lastName": "Makar", "teamName": "CAN", "position": "D"},
         ]
 
-    # Lataa live-pisteet
     live_scores = fetch_live_scoring_by_name()
     
     final_list = []
@@ -139,14 +171,12 @@ def get_all_players_data():
         pos = str(player['position'])
         
         full_name_csv = f"{f_name} {l_name}"
-        # Luodaan sama avain kuin API-haussa
         search_key = f"{clean_name(full_name_csv)}_{clean_name(country)}"
         
-        # Haetaan pisteet
         stats = live_scores.get(search_key, {'goals': 0, 'assists': 0})
         
         final_list.append({
-            "playerId": search_key, # Nyt ID on "connormcdavid_can"
+            "playerId": search_key,
             "firstName": {"default": f_name},
             "lastName": {"default": l_name},
             "teamName": {"default": country},
@@ -201,9 +231,9 @@ def get_all_teams():
 st.title("🏒 Olympics Fantasy Hockey 2026")
 st.caption("Keeping Karlsson Community Fantasy Game")
 
-# Lataa pelaajat heti alussa
 PLAYERS_DATA = get_all_players_data()
-st.sidebar.success(f"Loaded {len(PLAYERS_DATA)} players from database.")
+if PLAYERS_DATA:
+    st.sidebar.success(f"Loaded {len(PLAYERS_DATA)} players from database.")
 
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard"])
 
@@ -227,12 +257,11 @@ elif page == "Create Team":
         st.write("""
         **Roster Requirements:**
         1. Select exactly **7 Forwards** and **3 Defensemen**.
-        2. **One Player Per Nation Rule:** You can select maximum **1 player** from any single country.
-        3. Goaltenders are not included in this format.
+        2. **One Player Per Nation Rule:** Maximum **1 player** from any single country.
+        3. Goaltenders not included.
         """)
 
     with st.form("team_form"):
-        # 1. TEAM INFO
         c1, c2 = st.columns(2)
         team_name = c1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
         pin = c2.text_input("PIN Code", type="password", placeholder="4-10 digits")
@@ -240,43 +269,36 @@ elif page == "Create Team":
         st.divider()
         st.subheader("Select Players by Country")
         
-        # 2. DATA PREPARATION
-        # Ryhmitellään pelaajat maittain
+        # DATA PREPARATION
         players_by_country = {}
         for p in PLAYERS_DATA:
             country = p['teamName']['default']
             if country not in players_by_country:
                 players_by_country[country] = {'F': [], 'D': []}
             
-            # Normalisoidaan pelipaikat (F = hyökkääjä, D = pakki)
             pos = p['position']
             if pos in ['C', 'L', 'R', 'F']:
                 players_by_country[country]['F'].append(p)
             elif pos == 'D':
                 players_by_country[country]['D'].append(p)
 
-        # Järjestetään maat aakkosjärjestykseen
         sorted_countries = sorted(players_by_country.keys())
         
-        # Tähän kerätään käyttäjän valinnat
         selected_player_ids = []
         
-        # 3. RENDER PLAYER SELECTION (Checkboxes)
-        # Käydään läpi jokainen maa ja luodaan Expander
+        # RENDER WITH FLAGS!
         for country in sorted_countries:
-            with st.expander(f"🏁 {country}"):
+            flag = get_flag(country)
+            with st.expander(f"{flag} {country}"):
                 col_f, col_d = st.columns(2)
                 
-                # Hyökkääjät vasemmalle
                 with col_f:
                     st.markdown("**Forwards**")
                     for p in players_by_country[country]['F']:
                         label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        # Checkboxin avain on uniikki pelaaja-ID
                         if st.checkbox(label, key=f"chk_{p['playerId']}"):
                             selected_player_ids.append(p['playerId'])
                             
-                # Pakit oikealle
                 with col_d:
                     st.markdown("**Defensemen**")
                     for p in players_by_country[country]['D']:
@@ -284,51 +306,39 @@ elif page == "Create Team":
                         if st.checkbox(label, key=f"chk_{p['playerId']}"):
                             selected_player_ids.append(p['playerId'])
 
-        # 4. REAL-TIME VALIDATION LOGIC
-        # Huom: Streamlitissä checkboxien tila luetaan vasta kun koodi ajetaan.
-        # Validointi tapahtuu tässä "submit"-napin painalluksen yhteydessä tai 
-        # aina kun käyttäjä klikkaa jotain (koska scripti ajaa uudestaan).
-        
-        # Analysoidaan valinnat
+        # VALIDATION LOGIC
         stats_counts = {'F': 0, 'D': 0}
         country_counts = {}
         
-        # Luodaan hakukartta jotta saadaan pelaajan tiedot ID:llä
         player_map = {p['playerId']: p for p in PLAYERS_DATA}
         
         for pid in selected_player_ids:
             p = player_map[pid]
             
-            # Pelipaikka
             pos = 'D' if p['position'] == 'D' else 'F'
             stats_counts[pos] += 1
             
-            # Maa
             ctry = p['teamName']['default']
             country_counts[ctry] = country_counts.get(ctry, 0) + 1
 
-        # 5. DISPLAY STATUS (Feedback UI)
+        # DISPLAY STATUS
         st.divider()
         st.subheader("Draft Status")
         
         s1, s2, s3 = st.columns(3)
         
-        # Forwards Status
         f_color = "green" if stats_counts['F'] == 7 else "red"
         s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
         
-        # Defense Status
         d_color = "green" if stats_counts['D'] == 3 else "red"
         s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
         
-        # Country Rule Status
         violation_countries = [c for c, count in country_counts.items() if count > 1]
         if not violation_countries:
             s3.markdown("Country Rule: :green[**OK**]")
         else:
             s3.markdown(f"Country Rule: :red[**VIOLATION ({', '.join(violation_countries)})**]")
 
-        # 6. SUBMIT BUTTON & FINAL CHECK
         submit = st.form_submit_button("💾 Validate & Save Team", type="primary")
         
         if submit:
@@ -349,7 +359,6 @@ elif page == "Create Team":
                 for e in errors:
                     st.error(e)
             else:
-                # Kaikki kunnossa, tallennetaan!
                 success, msg = save_team(team_name, pin, selected_player_ids)
                 if success:
                     st.balloons()
@@ -367,7 +376,6 @@ elif page == "My Team":
         submit = st.form_submit_button("🔓 Log In")
     
     if submit:
-        # Etsi joukkue
         target_team = None
         for t in get_all_teams():
             if t['team_name'] == login_name:
@@ -377,7 +385,6 @@ elif page == "My Team":
         if target_team and hash_pin(login_pin) == target_team['pin_hash']:
             st.success(f"Team: {target_team['team_name']}")
             
-            # Luo hakukartta ID -> Pelaaja
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
             team_roster = []
@@ -386,9 +393,10 @@ elif page == "My Team":
             for pid in target_team.get('player_ids', []):
                 if pid in player_map:
                     p = player_map[pid]
+                    flag = get_flag(p['teamName']['default'])
                     team_roster.append({
                         "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
-                        "Country": p['teamName']['default'],
+                        "Country": f"{flag} {p['teamName']['default']}",
                         "G": p['goals'],
                         "A": p['assists'],
                         "FP": p['points']
@@ -423,3 +431,10 @@ elif page == "Leaderboard":
     df = pd.DataFrame(rankings).sort_values("Points", ascending=False).reset_index(drop=True)
     df.index += 1
     st.dataframe(df, use_container_width=True)
+'''
+
+# Tallennetaan
+with open('/mnt/kimi/output/app_with_flags.py', 'w', encoding='utf-8') as f:
+    f.write(app_with_flags)
+
+
