@@ -223,140 +223,158 @@ if page == "Home":
 elif page == "Create Team":
     st.header("📝 Create Your Olympic Roster")
     
-    with st.expander("ℹ️ Rules & Instructions", expanded=True):
-        st.write("""
-        **Roster Requirements:**
-        1. Select exactly **7 Forwards** and **3 Defensemen**.
-        2. **One Player Per Nation Rule:** You can select maximum **1 player** from any single country.
-        3. Goaltenders are not included in this format.
-        """)
+    # --- 1. LASKETAAN NYKYISET VALINNAT (LIVENÄ) ---
+    # Streamlit muistaa checkboxien tilat session_statessa avaimen (key) perusteella.
+    # Käymme läpi kaikki pelaajat ja katsomme, onko heidän checkboxinsa 'True'.
+    
+    current_selection = []
+    
+    # Luodaan nopea hakemisto pelaajista
+    player_map = {p['playerId']: p for p in PLAYERS_DATA}
+    
+    # Tarkistetaan session_state suoraan
+    for pid, p in player_map.items():
+        # Avain on muotoa "chk_pelaajaID"
+        chk_key = f"chk_{pid}"
+        if st.session_state.get(chk_key, False):
+            current_selection.append(p)
 
-    with st.form("team_form"):
-        # 1. TEAM INFO
-        c1, c2 = st.columns(2)
-        team_name = c1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
-        pin = c2.text_input("PIN Code", type="password", placeholder="4-10 digits")
-        
-        st.divider()
-        st.subheader("Select Players by Country")
-        
-        # 2. DATA PREPARATION
-        # Ryhmitellään pelaajat maittain
-        players_by_country = {}
-        for p in PLAYERS_DATA:
-            country = p['teamName']['default']
-            if country not in players_by_country:
-                players_by_country[country] = {'F': [], 'D': []}
-            
-            # Normalisoidaan pelipaikat (F = hyökkääjä, D = pakki)
-            pos = p['position']
-            if pos in ['C', 'L', 'R', 'F']:
-                players_by_country[country]['F'].append(p)
-            elif pos == 'D':
-                players_by_country[country]['D'].append(p)
-
-        # Järjestetään maat aakkosjärjestykseen
-        sorted_countries = sorted(players_by_country.keys())
-        
-        # Tähän kerätään käyttäjän valinnat
-        selected_player_ids = []
-        
-        # 3. RENDER PLAYER SELECTION (Checkboxes)
-        # Käydään läpi jokainen maa ja luodaan Expander
-        for country in sorted_countries:
-            with st.expander(f"🏁 {country}"):
-                col_f, col_d = st.columns(2)
-                
-                # Hyökkääjät vasemmalle
-                with col_f:
-                    st.markdown("**Forwards**")
-                    for p in players_by_country[country]['F']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        # Checkboxin avain on uniikki pelaaja-ID
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
-                            
-                # Pakit oikealle
-                with col_d:
-                    st.markdown("**Defensemen**")
-                    for p in players_by_country[country]['D']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
-
-        # 4. REAL-TIME VALIDATION LOGIC
-        # Huom: Streamlitissä checkboxien tila luetaan vasta kun koodi ajetaan.
-        # Validointi tapahtuu tässä "submit"-napin painalluksen yhteydessä tai 
-        # aina kun käyttäjä klikkaa jotain (koska scripti ajaa uudestaan).
-        
-        # Analysoidaan valinnat
-        stats_counts = {'F': 0, 'D': 0}
-        country_counts = {}
-        
-        # Luodaan hakukartta jotta saadaan pelaajan tiedot ID:llä
-        player_map = {p['playerId']: p for p in PLAYERS_DATA}
-        
-        for pid in selected_player_ids:
-            p = player_map[pid]
-            
-            # Pelipaikka
-            pos = 'D' if p['position'] == 'D' else 'F'
-            stats_counts[pos] += 1
-            
-            # Maa
-            ctry = p['teamName']['default']
-            country_counts[ctry] = country_counts.get(ctry, 0) + 1
-
-        # 5. DISPLAY STATUS (Feedback UI)
-        st.divider()
-        st.subheader("Draft Status")
-        
-        s1, s2, s3 = st.columns(3)
-        
-        # Forwards Status
-        f_color = "green" if stats_counts['F'] == 7 else "red"
-        s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
-        
-        # Defense Status
-        d_color = "green" if stats_counts['D'] == 3 else "red"
-        s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
-        
-        # Country Rule Status
-        violation_countries = [c for c, count in country_counts.items() if count > 1]
-        if not violation_countries:
-            s3.markdown("Country Rule: :green[**OK**]")
+    # Analysoidaan valinnat
+    count_f = 0
+    count_d = 0
+    countries_selected = []
+    
+    for p in current_selection:
+        # Tulkitaan pelipaikat
+        pos = p['position']
+        if pos == 'D':
+            count_d += 1
         else:
-            s3.markdown(f"Country Rule: :red[**VIOLATION ({', '.join(violation_countries)})**]")
+            count_f += 1 # Kaikki muut (F, C, L, R) lasketaan hyökkääjiksi
+            
+        countries_selected.append(p['teamName']['default'])
 
-        # 6. SUBMIT BUTTON & FINAL CHECK
-        submit = st.form_submit_button("💾 Validate & Save Team", type="primary")
+    # Etsitään maat, joista on valittu useampi pelaaja
+    from collections import Counter
+    country_counts = Counter(countries_selected)
+    violation_countries = [c for c, count in country_counts.items() if count > 1]
+
+    # --- 2. LIVE DASHBOARD (NÄYTETÄÄN YLÄREUNASSA) ---
+    # Käytetään container-elementtiä, jotta se erottuu
+    with st.container(border=True):
+        st.markdown("### 📊 Live Draft Status")
         
-        if submit:
-            errors = []
-            
-            if not team_name:
-                errors.append("Missing Team Name.")
-            if not pin or len(pin) < 4:
-                errors.append("Invalid PIN (min 4 digits).")
-            if stats_counts['F'] != 7:
-                errors.append(f"You must select exactly 7 Forwards (Selected: {stats_counts['F']}).")
-            if stats_counts['D'] != 3:
-                errors.append(f"You must select exactly 3 Defensemen (Selected: {stats_counts['D']}).")
-            if violation_countries:
-                errors.append(f"You have selected multiple players from: {', '.join(violation_countries)}. Only 1 per country allowed.")
-            
-            if errors:
-                for e in errors:
-                    st.error(e)
-            else:
-                # Kaikki kunnossa, tallennetaan!
-                success, msg = save_team(team_name, pin, selected_player_ids)
-                if success:
-                    st.balloons()
-                    st.success(f"Team '{team_name}' successfully created! Good luck!")
-                else:
-                    st.error(msg)
+        col1, col2, col3 = st.columns(3)
+        
+        # Hyökkääjät (Tavoite 7)
+        f_delta = count_f - 7
+        f_color = "normal"
+        if count_f == 7: f_color = "off" # Vihreä efekti metricissä on 'off' kun delta on 0? Ei, käytetään väriä tekstissä.
+        
+        col1.metric(
+            label="Forwards (Goal: 7)", 
+            value=f"{count_f} / 7", 
+            delta="OK" if count_f == 7 else f"{f_delta}",
+            delta_color="normal" if count_f == 7 else "inverse"
+        )
+        
+        # Puolustajat (Tavoite 3)
+        d_delta = count_d - 3
+        col2.metric(
+            label="Defense (Goal: 3)", 
+            value=f"{count_d} / 3",
+            delta="OK" if count_d == 3 else f"{d_delta}",
+            delta_color="normal" if count_d == 3 else "inverse"
+        )
+        
+        # Maa-sääntö
+        if not violation_countries:
+            col3.success("Country Rule: ✅ OK")
+        else:
+            col3.error(f"❌ Too many from: {', '.join(violation_countries)}")
 
+    st.divider()
+
+    # --- 3. TEAM DETAILS ---
+    c1, c2 = st.columns(2)
+    team_name = c1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
+    pin = c2.text_input("PIN Code", type="password", placeholder="4-10 digits")
+    
+    st.subheader("Select Players by Country")
+
+    # --- 4. RENDER PLAYERS (CHECKBOXES) ---
+    
+    # Ryhmitellään pelaajat maittain
+    players_by_country = {}
+    for p in PLAYERS_DATA:
+        country = p['teamName']['default']
+        if country not in players_by_country:
+            players_by_country[country] = {'F': [], 'D': []}
+        
+        pos = p['position']
+        if pos == 'D':
+            players_by_country[country]['D'].append(p)
+        else:
+            players_by_country[country]['F'].append(p)
+            
+    sorted_countries = sorted(players_by_country.keys())
+    
+    # Luodaan käyttöliittymä
+    for country in sorted_countries:
+        # Näytetään maan nimi ja onko sieltä valittu joku (visuaalinen apu)
+        is_selected = country in countries_selected
+        icon = "✅" if is_selected else "🏁"
+        
+        # Jos maasta on valittu liikaa, väritetään expaderin otsikko punaiseksi (Streamlit ei tue väriä otsikossa suoraan, mutta ikoni auttaa)
+        if country in violation_countries: icon = "❌"
+        
+        with st.expander(f"{icon} {country}"):
+            col_f, col_d = st.columns(2)
+            
+            with col_f:
+                st.caption("Forwards")
+                for p in players_by_country[country]['F']:
+                    # TÄRKEÄÄ: Checkbox päivittää session_statea heti
+                    st.checkbox(
+                        f"{p['firstName']['default']} {p['lastName']['default']}", 
+                        key=f"chk_{p['playerId']}"
+                    )
+            
+            with col_d:
+                st.caption("Defensemen")
+                for p in players_by_country[country]['D']:
+                    st.checkbox(
+                        f"{p['firstName']['default']} {p['lastName']['default']}", 
+                        key=f"chk_{p['playerId']}"
+                    )
+
+    # --- 5. TALLENNUSNAPPI ---
+    st.divider()
+    
+    # Nappi on nyt erillinen, ei formin sisällä.
+    if st.button("💾 Save Team", type="primary", use_container_width=True):
+        errors = []
+        
+        # Validointi (uudestaan varmuuden vuoksi)
+        if not team_name: errors.append("Missing Team Name.")
+        if not pin or len(pin) < 4: errors.append("Invalid PIN (min 4 digits).")
+        if count_f != 7: errors.append(f"Select exactly 7 Forwards (Currently: {count_f}).")
+        if count_d != 3: errors.append(f"Select exactly 3 Defensemen (Currently: {count_d}).")
+        if violation_countries: errors.append(f"Rule violation: Multiple players from {', '.join(violation_countries)}.")
+        
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            # Kerätään ID:t tallennusta varten
+            final_ids = [p['playerId'] for p in current_selection]
+            
+            success, msg = save_team(team_name, pin, final_ids)
+            if success:
+                st.balloons()
+                st.success(f"Team '{team_name}' saved successfully!")
+            else:
+                st.error(msg)
 elif page == "My Team":
     st.header("👤 View Your Team")
     
