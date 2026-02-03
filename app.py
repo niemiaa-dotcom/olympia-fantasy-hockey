@@ -443,9 +443,10 @@ if page == "🏠 Home":
         st.markdown("### 🏒 Rules")
         st.markdown("""
         - **12 players**: One from each Olympic nation
+        - **Over 95 % owned players based on Fantrax ownership are excluded from the pool to leave out the most obvious selections.**
         - **8 forwards + 4 defensemen**
-        - **One player per country** - no duplicates!
-        - **Countries Competition**: Represent your nation!
+        - **One player per national team** - no duplicates!
+        - **Managers compete in individual leaderboard and in their own national teams**: Represent your nation!
         """)
     
     with col_right:
