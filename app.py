@@ -531,55 +531,78 @@ elif page == "Create Team":
                     st.error(msg)
 
 elif page == "My Team":
-    # ... (sama kuin ennen, mutta lisätty poisto-toiminto)
     st.header("👤 View Your Team")
     
-    with st.form("login_form"):
-        col1, col2 = st.columns(2)
-        login_name = col1.text_input("Team Name")
-        login_pin = col2.text_input("PIN", type="password")
-        submit = st.form_submit_button("🔓 Log In")
+    # Alusta session state jos ei ole
+    if 'logged_in_team' not in st.session_state:
+        st.session_state['logged_in_team'] = None
+    if 'show_delete_confirm' not in st.session_state:
+        st.session_state['show_delete_confirm'] = False
     
-    if submit:
-        target_team = None
-        for t in get_all_teams():
-            if t['team_name'] == login_name:
-                target_team = t
-                break
+    # Jos ei olla kirjautuneena, näytä kirjautumislomake
+    if st.session_state['logged_in_team'] is None:
+        with st.form("login_form"):
+            col1, col2 = st.columns(2)
+            login_name = col1.text_input("Team Name")
+            login_pin = col2.text_input("PIN", type="password")
+            submit = st.form_submit_button("🔓 Log In")
         
-        if target_team and hash_pin(login_pin) == target_team['pin_hash']:
-            manager_country = target_team.get("manager_country", "UNK")
+        if submit:
+            target_team = None
+            for t in get_all_teams():
+                if t['team_name'] == login_name:
+                    target_team = t
+                    break
             
-            st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
+            if target_team and hash_pin(login_pin) == target_team['pin_hash']:
+                st.session_state['logged_in_team'] = target_team
+                st.rerun()
+            else:
+                st.error("Invalid Team Name or PIN")
+    
+    # Jos ollaan kirjautuneena, näytä joukkue
+    else:
+        target_team = st.session_state['logged_in_team']
+        manager_country = target_team.get("manager_country", "UNK")
+        
+        st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
+        
+        # --- POISTO-TOIMINTO ---
+        if not st.session_state['show_delete_confirm']:
+            if st.button("🗑️ Delete Team", type="secondary"):
+                st.session_state['show_delete_confirm'] = True
+                st.rerun()
+        else:
+            st.warning("⚠️ Are you sure you want to delete this team? This cannot be undone!")
+            col1, col2 = st.columns(2)
             
-            # --- POISTO-TOIMINTO ---
-            col1, col2, col3 = st.columns([2, 2, 1])
-            with col3:
-                if st.button("🗑️ Delete Team", type="secondary", help="Permanently delete this team"):
-                    st.session_state['confirm_delete'] = True
+            with col1:
+                if st.button("✅ Yes, Delete", type="primary", key="confirm_delete_yes"):
+                    db = get_db()
+                    if db:
+                        try:
+                            # Poista Firebase:stä
+                            db.collection("teams").document(target_team['team_name']).delete()
+                            st.success(f"Team '{target_team['team_name']}' deleted successfully!")
+                            
+                            # Resetoi session state
+                            st.session_state['logged_in_team'] = None
+                            st.session_state['show_delete_confirm'] = False
+                            
+                            st.balloons()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting: {e}")
+                    else:
+                        st.error("Database connection failed")
             
-            if st.session_state.get('confirm_delete'):
-                st.warning("⚠️ Are you sure? This cannot be undone!")
-                conf_col1, conf_col2 = st.columns(2)
-                with conf_col1:
-                    if st.button("✅ Yes, Delete", type="primary", key="confirm_yes"):
-                        db = get_db()
-                        if db:
-                            try:
-                                db.collection("teams").document(login_name).delete()
-                                st.success(f"Team '{login_name}' deleted!")
-                                st.session_state['confirm_delete'] = False
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error deleting: {e}")
-                        else:
-                            st.error("Database connection failed")
-                with conf_col2:
-                    if st.button("❌ Cancel", key="confirm_no"):
-                        st.session_state['confirm_delete'] = False
-                        st.rerun()
-            
-            # --- ROSTERIN NÄYTTÖ ---
+            with col2:
+                if st.button("❌ Cancel", key="confirm_delete_no"):
+                    st.session_state['show_delete_confirm'] = False
+                    st.rerun()
+        
+        # --- ROSTERIN NÄYTTÖ ---
+        if st.session_state['logged_in_team']:  # Tarkista ettei ole juuri poistettu
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
             team_roster = []
@@ -611,9 +634,11 @@ elif page == "My Team":
             )
             st.metric("Total Points", total_pts)
             
-        else:
-            st.error("Invalid Team Name or PIN")
-
+            # Kirjaudu ulos -nappi
+            if st.button("🔒 Log Out"):
+                st.session_state['logged_in_team'] = None
+                st.session_state['show_delete_confirm'] = False
+                st.rerun()
 elif page == "Leaderboard":
     # ... (sama kuin ennen)
     st.header("🏆 Individual Leaderboard")
