@@ -577,6 +577,16 @@ elif page == "My Team":
 
 elif page == "Leaderboard":
     st.header("🏆 Individual Leaderboard")
+
+    # --- CACHE CLEAR & REFRESH ---
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🔄 Refresh Data", type="secondary", help="Force refresh from NHL API"):
+            # Clear all cached data
+            fetch_live_scoring_by_name.clear()
+            get_all_players_data.clear()
+            st.success("Cache cleared! Reloading...")
+            st.rerun()
     
     all_teams = get_all_teams()
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
