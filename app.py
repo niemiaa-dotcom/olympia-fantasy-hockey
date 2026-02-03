@@ -199,7 +199,6 @@ def get_all_teams():
 
 # --- USER INTERFACE ---
 st.title("🏒 Olympics Fantasy Hockey 2026")
-st.caption("Keeping Karlsson Community Fantasy Game")
 
 # Lataa pelaajat heti alussa
 PLAYERS_DATA = get_all_players_data()
