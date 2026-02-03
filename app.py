@@ -11,6 +11,21 @@ from collections import defaultdict
 import logging
 logging.basicConfig(level=logging.INFO)
 
+# --- OLYMPICS DEADLINE ---
+OLYMPICS_START = datetime(2026, 2, 11, 0, 0)  # 11.2.2026 00:00
+
+def is_before_deadline():
+    """Check if current time is before Olympics start"""
+    return datetime.now() < OLYMPICS_START
+
+def get_deadline_message():
+    """Get user-friendly deadline message"""
+    if is_before_deadline():
+        days_left = (OLYMPICS_START - datetime.now()).days
+        return f"⏰ Team changes allowed until February 11, 2026 ({days_left} days remaining)"
+    else:
+        return "🔒 Olympics have started - team changes are now locked"
+
 # --- SETTINGS ---
 st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
 
@@ -499,11 +514,33 @@ elif page == "My Team":
         
         st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
         
-        if not st.session_state['show_delete_confirm']:
-            if st.button("🗑️ Delete Team", type="secondary"):
-                st.session_state['show_delete_confirm'] = True
-                st.rerun()
+        # Show deadline status
+        if is_before_deadline():
+            st.info(get_deadline_message())
         else:
+            st.warning(get_deadline_message())
+        
+        # Action buttons
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🔄 Refresh Points", type="secondary"):
+                st.rerun()
+        
+        with col2:
+            # Only show Edit button before deadline
+            if is_before_deadline():
+                if st.button("✏️ Edit Team", type="primary"):
+                    st.session_state['editing_team'] = True
+                    st.rerun()
+        
+        with col3:
+            if not st.session_state['show_delete_confirm']:
+                if st.button("🗑️ Delete Team", type="secondary"):
+                    st.session_state['show_delete_confirm'] = True
+                    st.rerun()
+        
+        if st.session_state.get('show_delete_confirm', False):
             st.warning("⚠️ Are you sure you want to delete this team? This cannot be undone!")
             col1, col2 = st.columns(2)
             
@@ -528,6 +565,175 @@ elif page == "My Team":
                     st.session_state['show_delete_confirm'] = False
                     st.rerun()
         
+        # EDIT TEAM MODE
+        if st.session_state.get('editing_team', False):
+            st.divider()
+            st.subheader("✏️ Edit Your Team")
+            st.info("Select new players for your team. Your current selections will be replaced.")
+            
+            # Initialize temp selections with current team
+            if 'edit_temp_selections' not in st.session_state:
+                st.session_state['edit_temp_selections'] = {}
+                # Pre-select current players
+                current_players = target_team.get('player_ids', [])
+                player_map_temp = {p['playerId']: p for p in PLAYERS_DATA}
+                for pid in current_players:
+                    if pid in player_map_temp:
+                        p = player_map_temp[pid]
+                        country = p['teamName']['default']
+                        st.session_state['edit_temp_selections'][f"chk_{country}_{pid}"] = True
+                        st.session_state['edit_temp_selections'][country] = pid
+            
+            # Player selection interface (similar to Create Team)
+            players_by_country = {}
+            for idx, p in enumerate(PLAYERS_DATA):
+                country = p['teamName']['default']
+                if country not in players_by_country:
+                    players_by_country[country] = {'F': [], 'D': []}
+                
+                pos = p['position']
+                if pos in ['C', 'L', 'R', 'F']:
+                    players_by_country[country]['F'].append((idx, p))
+                elif pos == 'D':
+                    players_by_country[country]['D'].append((idx, p))
+            
+            sorted_countries = sorted(players_by_country.keys())
+            selected_player_ids = []
+            
+            for country in sorted_countries:
+                flag = get_flag(country)
+                
+                with st.expander(f"{flag} {country} - Select ONE player", expanded=False):
+                    col_f, col_d = st.columns(2)
+                    
+                    with col_f:
+                        st.markdown("**Forwards**")
+                        for idx, p in players_by_country[country]['F']:
+                            label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                            checkbox_key = f"chk_{country}_{p['playerId']}"
+                            
+                            country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
+                            is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
+                            disabled = country_already_selected and not is_selected
+                            
+                            checked = st.checkbox(
+                                label, 
+                                key=f"edit_{checkbox_key}",
+                                value=is_selected,
+                                disabled=disabled
+                            )
+                            
+                            if checked:
+                                st.session_state['edit_temp_selections'][checkbox_key] = True
+                                st.session_state['edit_temp_selections'][country] = p['playerId']
+                                selected_player_ids.append(p['playerId'])
+                            else:
+                                if checkbox_key in st.session_state['edit_temp_selections']:
+                                    del st.session_state['edit_temp_selections'][checkbox_key]
+                                    if st.session_state['edit_temp_selections'].get(country) == p['playerId']:
+                                        del st.session_state['edit_temp_selections'][country]
+                    
+                    with col_d:
+                        st.markdown("**Defensemen**")
+                        for idx, p in players_by_country[country]['D']:
+                            label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                            checkbox_key = f"chk_{country}_{p['playerId']}"
+                            
+                            country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
+                            is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
+                            disabled = country_already_selected and not is_selected
+                            
+                            checked = st.checkbox(
+                                label, 
+                                key=f"edit_{checkbox_key}",
+                                value=is_selected,
+                                disabled=disabled
+                            )
+                            
+                            if checked:
+                                st.session_state['edit_temp_selections'][checkbox_key] = True
+                                st.session_state['edit_temp_selections'][country] = p['playerId']
+                                selected_player_ids.append(p['playerId'])
+                            else:
+                                if checkbox_key in st.session_state['edit_temp_selections']:
+                                    del st.session_state['edit_temp_selections'][checkbox_key]
+                                    if st.session_state['edit_temp_selections'].get(country) == p['playerId']:
+                                        del st.session_state['edit_temp_selections'][country]
+            
+            selected_player_ids = list(set(selected_player_ids))
+            
+            # Validation
+            stats_counts = {'F': 0, 'D': 0, 'total': 0}
+            countries_selected = set()
+            player_map = {p['playerId']: p for p in PLAYERS_DATA}
+            
+            for pid in selected_player_ids:
+                p = player_map[pid]
+                pos = 'D' if p['position'] == 'D' else 'F'
+                stats_counts[pos] += 1
+                stats_counts['total'] += 1
+                countries_selected.add(p['teamName']['default'])
+            
+            st.divider()
+            st.subheader("Draft Status")
+            
+            cols = st.columns(4)
+            total_color = "green" if stats_counts['total'] == 12 else "orange" if stats_counts['total'] < 12 else "red"
+            cols[0].markdown(f"Total Players: :{total_color}[**{stats_counts['total']} / 12**]")
+            
+            d_color = "green" if stats_counts['D'] == 4 else "red"
+            cols[1].markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 4**]")
+            
+            f_color = "green" if stats_counts['F'] == 8 else "red"
+            cols[2].markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 8**]")
+            
+            countries_color = "green" if len(countries_selected) == 12 else "orange"
+            cols[3].markdown(f"Countries: :{countries_color}[**{len(countries_selected)} / 12**]")
+            
+            missing_countries = set(OLYMPIC_TEAMS) - countries_selected
+            if missing_countries:
+                st.warning(f"⚠️ Missing players from: {', '.join(sorted(missing_countries))}")
+            
+            can_save = (
+                stats_counts['total'] == 12 and
+                stats_counts['D'] == 4 and
+                stats_counts['F'] == 8 and
+                len(countries_selected) == 12 and
+                len(missing_countries) == 0
+            )
+            
+            col_save, col_cancel = st.columns(2)
+            
+            with col_save:
+                if st.button("💾 Save Changes", type="primary", disabled=not can_save):
+                    if can_save:
+                        # Update team in database
+                        db = get_db()
+                        if db:
+                            try:
+                                db.collection("teams").document(target_team['team_name']).update({
+                                    'player_ids': selected_player_ids
+                                })
+                                st.session_state['logged_in_team']['player_ids'] = selected_player_ids
+                                st.session_state['editing_team'] = False
+                                st.session_state['edit_temp_selections'] = {}
+                                st.success("✅ Team updated successfully!")
+                                st.balloons()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error updating team: {e}")
+                        else:
+                            st.error("Database connection failed")
+            
+            with col_cancel:
+                if st.button("❌ Cancel Edit", type="secondary"):
+                    st.session_state['editing_team'] = False
+                    st.session_state['edit_temp_selections'] = {}
+                    st.rerun()
+            
+            st.stop()  # Don't show roster below when editing
+        
+        # SHOW CURRENT ROSTER
         if st.session_state['logged_in_team']:
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
@@ -560,14 +766,25 @@ elif page == "My Team":
             )
             st.metric("Total Points", total_pts)
             
-            if st.button("🔒 Log Out"):
+            st.divider()
+            if st.button("🔒 Log Out", type="secondary"):
                 st.session_state['logged_in_team'] = None
                 st.session_state['show_delete_confirm'] = False
+                st.session_state['editing_team'] = False
+                st.session_state['edit_temp_selections'] = {}
                 st.rerun()
 
 # --- CREATE TEAM SIVU (UUDET SÄÄNNÖT) ---
 elif page == "Create Team":
     st.header("📝 Create Your Olympic Roster")
+    
+    # Check deadline
+    if not is_before_deadline():
+        st.error("🔒 Team creation is closed. The Olympics have started!")
+        st.info("The tournament began on February 11, 2026. Team changes are no longer allowed.")
+        st.stop()
+    
+    st.success(get_deadline_message())
     
     with st.expander("ℹ️ Rules", expanded=True):
         st.write("""
