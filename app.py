@@ -27,7 +27,7 @@ def get_deadline_message():
         return "🔒 Olympics have started - team changes are now locked"
 
 # --- SETTINGS ---
-st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
+st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
 
 # --- COUNTRY FLAGS & LIST ---
 COUNTRY_FLAGS = {
@@ -344,7 +344,7 @@ def clear_all_cache():
         return False
 
 # --- UI ---
-st.title("🏒 Olympics Fantasy Hockey 2025")
+st.title("🏒 Olympics Fantasy Hockey 2026")
 
 PLAYERS_DATA = get_all_players_data()
 
