@@ -74,24 +74,24 @@ def init_firebase():
 def get_db():
     return init_firebase()
 
-# --- DATA FUNCTIONS ---
 def clean_name(name):
-    """Normalisoi nimen: poistaa erikoismerkit, välilyönnit, alaviivat"""
+    """Normalisoi nimen: poistaa erikoismerkit, välilyönnit, alaviivat ja PI STEET"""
     if not name: 
         return ""
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
+    # Poista VÄLILYÖNIT, ALAVIIVAT ja PISTEET
     return n.lower().strip().replace(" ", "").replace("_", "").replace(".", "")
 
 def create_short_key(first_name, last_name):
     """
-    Luo lyhennetty avain API:n mukaan: eka kirjain + piste + sukunimi
-    Esimerkki: "Tomas", "Hertl" → "t.hertl"
+    Luo lyhennetty avain API:n mukaan: eka kirjain + sukunimi (EI pistettä!)
+    Esimerkki: "Tomas", "Hertl" → "thertl"
     """
     if not first_name or not last_name:
         return ""
     first_initial = first_name[0].lower()
     last_clean = clean_name(last_name)
-    return f"{first_initial}.{last_clean}"
+    return f"{first_initial}{last_clean}"  # EI pistettä väliin!
 
 @st.cache_data(ttl=60)
 def fetch_live_scoring_by_name():
@@ -140,7 +140,7 @@ def fetch_live_scoring_by_name():
                                     name_default = p.get('name', {}).get('default', '')
                                     
                                     if name_default:
-                                        # Muunna "T. Konecny" → "t.konecny"
+                                        # Muunna "T. Konecny" → "tkonecny" (poista piste!)
                                         key = f"{clean_name(name_default)}_{clean_name(country_code)}"
                                     else:
                                         # Fallback
@@ -190,20 +190,18 @@ def get_all_players_data():
         country = str(player['teamName'])
         pos = str(player['position'])
         
-        # Yritä täsmätä lyhennetyllä avaimella (API:n muoto)
+        # Yritä täsmätä lyhennetyllä avaimella ILMAN pistettä
         short_key = create_short_key(f_name, l_name) + f"_{clean_name(country)}"
         
-        # Hae stats lyhennetyllä avaimella
+        # Hae stats
         stats = live_scores.get(short_key, {'goals': 0, 'assists': 0})
         
-        # Debug: Vertaa
+        # Debug
         if len(debug_comparison) < 10:
-            full_key = f"{clean_name(f_name + ' ' + l_name)}_{clean_name(country)}"
             debug_comparison.append({
                 'name': f"{f_name} {l_name}",
                 'country': country,
                 'short_key': short_key,
-                'full_key': full_key,
                 'found': stats['goals'] > 0 or stats['assists'] > 0,
                 'stats': stats
             })
@@ -214,7 +212,6 @@ def get_all_players_data():
             if len(sample_matches) < 5:
                 sample_matches.append(f"{f_name} {l_name} ({country}): {stats['goals']}G {stats['assists']}A")
         
-        # Käytä lyhennettyä avainta ID:nä jotta täsmää API:n kanssa
         final_list.append({
             "playerId": short_key,
             "firstName": {"default": f_name},
