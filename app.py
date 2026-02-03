@@ -388,13 +388,13 @@ if 'confirm_delete' not in st.session_state:
     st.session_state['confirm_delete'] = False
 
 if page == "Home":
-    # ... (sama kuin ennen)
     st.write("""
-    ## Welcome to Olympics Fantasy Hockey 2025!
+    ## Welcome to Olympics Fantasy Hockey 2026!
     
-    ### New: Countries Competition! 🌍
-    Managers compete not only individually but also for their country's honor!
-    Countries with 4+ managers appear separately. Smaller countries are grouped as "Others".
+    ### Rules 🏒
+    - **12 players**: One from each Olympic nation (CAN, USA, SWE, FIN, CZE, SUI, GER, DEN, FRA, ITA, LAT, SVK)
+    - **4 defensemen + 8 forwards**
+    - **Countries Competition**: Managers compete for national pride!
     
     ### Scoring
     | Action | Points |
@@ -402,17 +402,20 @@ if page == "Home":
     | Goal | 1 pt |
     | Assist | 1 pt |
     """)
-
+    
 elif page == "Create Team":
     # ... (sama kuin ennen, mutta korjattu checkbox-key)
     st.header("📝 Create Your Olympic Roster")
     
     with st.expander("ℹ️ Rules", expanded=True):
-        st.write("""
-        - **7 Forwards + 3 Defensemen**
-        - **Max 1 player per Olympic nation** (CAN, USA, SWE, FIN, CZE, SUI, GER)
-        - Select your **manager nationality** for country competition!
-        """)
+    st.write("""
+    ### Olympics Fantasy Hockey 2026! 🏒
+    
+    - **Select exactly 12 players** (one from each of the 12 Olympic nations)
+    - **Exactly 4 defensemen** (D) and **8 forwards** (F)
+    - **Exactly 1 player per country** - you cannot select two players from the same nation!
+    - Select your **manager nationality** for country competition!
+    """)
 
     col1, col2 = st.columns(2)
     team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
@@ -530,16 +533,20 @@ elif page == "Create Team":
                 else:
                     st.error(msg)
 
+# --- LISÄÄ OLYMPIC TEAMS ---
+# 11 maata, joista jokaisesta täsmälleen 1 pelaaja
+OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
+                 "SVK", "SWE", "SUI", "USA"]
+
+# --- MY TEAM SIVU (korjattu poisto) ---
 elif page == "My Team":
     st.header("👤 View Your Team")
     
-    # Alusta session state jos ei ole
     if 'logged_in_team' not in st.session_state:
         st.session_state['logged_in_team'] = None
     if 'show_delete_confirm' not in st.session_state:
         st.session_state['show_delete_confirm'] = False
     
-    # Jos ei olla kirjautuneena, näytä kirjautumislomake
     if st.session_state['logged_in_team'] is None:
         with st.form("login_form"):
             col1, col2 = st.columns(2)
@@ -560,14 +567,13 @@ elif page == "My Team":
             else:
                 st.error("Invalid Team Name or PIN")
     
-    # Jos ollaan kirjautuneena, näytä joukkue
     else:
         target_team = st.session_state['logged_in_team']
         manager_country = target_team.get("manager_country", "UNK")
         
         st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
         
-        # --- POISTO-TOIMINTO ---
+        # Poisto-toiminto
         if not st.session_state['show_delete_confirm']:
             if st.button("🗑️ Delete Team", type="secondary"):
                 st.session_state['show_delete_confirm'] = True
@@ -581,14 +587,10 @@ elif page == "My Team":
                     db = get_db()
                     if db:
                         try:
-                            # Poista Firebase:stä
                             db.collection("teams").document(target_team['team_name']).delete()
                             st.success(f"Team '{target_team['team_name']}' deleted successfully!")
-                            
-                            # Resetoi session state
                             st.session_state['logged_in_team'] = None
                             st.session_state['show_delete_confirm'] = False
-                            
                             st.balloons()
                             st.rerun()
                         except Exception as e:
@@ -601,8 +603,8 @@ elif page == "My Team":
                     st.session_state['show_delete_confirm'] = False
                     st.rerun()
         
-        # --- ROSTERIN NÄYTTÖ ---
-        if st.session_state['logged_in_team']:  # Tarkista ettei ole juuri poistettu
+        # Rosterin näyttö
+        if st.session_state['logged_in_team']:
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
             team_roster = []
@@ -634,13 +636,229 @@ elif page == "My Team":
             )
             st.metric("Total Points", total_pts)
             
-            # Kirjaudu ulos -nappi
             if st.button("🔒 Log Out"):
                 st.session_state['logged_in_team'] = None
                 st.session_state['show_delete_confirm'] = False
                 st.rerun()
+
+# --- CREATE TEAM SIVU (UUDET SÄÄNNÖT) ---
+elif page == "Create Team":
+    st.header("📝 Create Your Olympic Roster")
+    
+    with st.expander("ℹ️ Rules", expanded=True):
+        st.write("""
+        ### New Rules for 2026 Olympics! 🏒
+        
+        - **Select exactly 11 players** (one from each Olympic nation)
+        - **Minimum 4 defensemen** (D)
+        - **Maximum 7 forwards** (F)
+        - **Exactly 1 player per country** - you cannot select two players from the same nation!
+        - Select your **manager nationality** for country competition!
+        """)
+
+    col1, col2 = st.columns(2)
+    team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
+    pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits", key="pin_input")
+    
+    st.subheader("🌍 Manager Nationality")
+    
+    col_flag, col_select = st.columns([1, 4])
+    
+    with col_select:
+        manager_country = st.selectbox(
+            "Select your country",
+            options=list(ALL_COUNTRIES.keys()),
+            format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}",
+            key="manager_country_select"
+        )
+    
+    with col_flag:
+        st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
+    
+    st.divider()
+    st.subheader("Select Players by Country")
+    st.caption("You must select exactly ONE player from each of the 11 Olympic nations!")
+    
+    # Data prep - vain Olympic maat
+    players_by_country = {}
+    for idx, p in enumerate(PLAYERS_DATA):
+        country = p['teamName']['default']
+        if country not in OLYMPIC_TEAMS:
+            continue  # Skip non-Olympic teams
+            
+        if country not in players_by_country:
+            players_by_country[country] = {'F': [], 'D': []}
+        
+        pos = p['position']
+        if pos in ['C', 'L', 'R', 'F']:
+            players_by_country[country]['F'].append((idx, p))
+        elif pos == 'D':
+            players_by_country[country]['D'].append((idx, p))
+    
+    # Järjestä maiden mukaan (vakiojärjestys)
+    sorted_countries = sorted(players_by_country.keys())
+    
+    # Seuraa valittuja pelaajia ja maita
+    selected_player_ids = []
+    selected_by_country = {}
+    
+    # Käytä session_statea tallentamaan valinnat sivun päivitysten yli
+    if 'temp_selections' not in st.session_state:
+        st.session_state['temp_selections'] = {}
+    
+    # Luo valintalista maittain
+    for country in sorted_countries:
+        flag = get_flag(country)
+        
+        with st.expander(f"{flag} {country} - Select ONE player", expanded=False):
+            col_f, col_d = st.columns(2)
+            
+            with col_f:
+                st.markdown("**Forwards**")
+                for idx, p in players_by_country[country]['F']:
+                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                    checkbox_key = f"chk_{country}_{idx}"
+                    
+                    # Tarkista onko maa jo valittu toiselta pelaajalta
+                    country_already_selected = st.session_state['temp_selections'].get(country) is not None
+                    is_selected = st.session_state['temp_selections'].get(checkbox_key, False)
+                    
+                    # Jos maa on jo valittu mutta tämä ei ole se valittu, disabled
+                    disabled = country_already_selected and not is_selected
+                    
+                    checked = st.checkbox(
+                        label, 
+                        key=checkbox_key,
+                        value=is_selected,
+                        disabled=disabled
+                    )
+                    
+                    if checked:
+                        st.session_state['temp_selections'][checkbox_key] = True
+                        st.session_state['temp_selections'][country] = p['playerId']
+                        selected_player_ids.append(p['playerId'])
+                    else:
+                        if checkbox_key in st.session_state['temp_selections']:
+                            del st.session_state['temp_selections'][checkbox_key]
+                            if st.session_state['temp_selections'].get(country) == p['playerId']:
+                                del st.session_state['temp_selections'][country]
+                        
+            with col_d:
+                st.markdown("**Defensemen**")
+                for idx, p in players_by_country[country]['D']:
+                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                    checkbox_key = f"chk_{country}_{idx}"
+                    
+                    country_already_selected = st.session_state['temp_selections'].get(country) is not None
+                    is_selected = st.session_state['temp_selections'].get(checkbox_key, False)
+                    
+                    disabled = country_already_selected and not is_selected
+                    
+                    checked = st.checkbox(
+                        label, 
+                        key=checkbox_key,
+                        value=is_selected,
+                        disabled=disabled
+                    )
+                    
+                    if checked:
+                        st.session_state['temp_selections'][checkbox_key] = True
+                        st.session_state['temp_selections'][country] = p['playerId']
+                        selected_player_ids.append(p['playerId'])
+                    else:
+                        if checkbox_key in st.session_state['temp_selections']:
+                            del st.session_state['temp_selections'][checkbox_key]
+                            if st.session_state['temp_selections'].get(country) == p['playerId']:
+                                del st.session_state['temp_selections'][country]
+    
+    # Poista duplikaatit
+    selected_player_ids = list(set(selected_player_ids))
+    
+    # Reaaliaikainen validointi
+stats_counts = {'F': 0, 'D': 0, 'total': 0}
+countries_selected = set()
+player_map = {p['playerId']: p for p in PLAYERS_DATA}
+
+for pid in selected_player_ids:
+    p = player_map[pid]
+    pos = 'D' if p['position'] == 'D' else 'F'
+    stats_counts[pos] += 1
+    stats_counts['total'] += 1
+    countries_selected.add(p['teamName']['default'])
+
+# Näytä tila
+st.divider()
+st.subheader("Draft Status")
+
+cols = st.columns(4)
+
+# Total players - 12 maata = 12 pelaajaa
+total_color = "green" if stats_counts['total'] == 12 else "orange" if stats_counts['total'] < 12 else "red"
+cols[0].markdown(f"Total Players: :{total_color}[**{stats_counts['total']} / 12**]")
+
+# Defensemen - TÄSMÄLLEEN 4
+d_color = "green" if stats_counts['D'] == 4 else "red"
+cols[1].markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 4**]")
+
+# Forwards - TÄSMÄLLEEN 8
+f_color = "green" if stats_counts['F'] == 8 else "red"
+cols[2].markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 8**]")
+
+# Countries - 12 maata
+countries_color = "green" if len(countries_selected) == 12 else "orange"
+cols[3].markdown(f"Countries: :{countries_color}[**{len(countries_selected)} / 12**]")
+
+# Listaa puuttuvat maat
+missing_countries = set(OLYMPIC_TEAMS) - countries_selected
+if missing_countries:
+    st.warning(f"⚠️ Missing players from: {', '.join(sorted(missing_countries))}")
+
+# Tallenna-nappi - päivitä ehdot
+can_save = (
+    stats_counts['total'] == 12 and
+    stats_counts['D'] == 4 and  # TÄSMÄLLEEN 4
+    stats_counts['F'] == 8 and  # TÄSMÄLLEEN 8
+    len(countries_selected) == 12 and
+    len(missing_countries) == 0
+)
+
+if not can_save:
+    st.info("💡 Select exactly 12 players (one from each of the 12 countries: 4 defensemen + 8 forwards)")
+
+submit = st.button("💾 Save Team", type="primary", key="save_team_btn", disabled=not can_save)
+
+if submit:
+    errors = []
+    
+    if not team_name:
+        errors.append("Missing Team Name.")
+    if not pin or len(pin) < 4:
+        errors.append("Invalid PIN (min 4 characters).")
+    if stats_counts['total'] != 12:
+        errors.append(f"Must select exactly 12 players (Selected: {stats_counts['total']}).")
+    if stats_counts['D'] != 4:
+        errors.append(f"Must select exactly 4 Defensemen (Selected: {stats_counts['D']}).")
+    if stats_counts['F'] != 8:
+        errors.append(f"Must select exactly 8 Forwards (Selected: {stats_counts['F']}).")
+    if len(countries_selected) != 12:
+        errors.append(f"Must select exactly one player from each of the 12 countries (Selected from: {len(countries_selected)}).")
+        
+        if errors:
+            for e in errors:
+                st.error(e)
+        else:
+            success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
+            if success:
+                # Tyhjennä valinnat
+                st.session_state['temp_selections'] = {}
+                st.balloons()
+                st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
+                st.info("Go to 'My Team' to view your roster!")
+            else:
+                st.error(msg)
+
+# --- LEADERBOARD SIVU ---
 elif page == "Leaderboard":
-    # ... (sama kuin ennen)
     st.header("🏆 Individual Leaderboard")
 
     col1, col2 = st.columns([3, 1])
@@ -740,15 +958,62 @@ elif page == "Leaderboard":
             
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Points", total_pts)
-            col2.metric("Forwards", len([r for r in team_roster if r['Pos'] in ['C', 'L', 'R', 'F']]))
-            col3.metric("Defensemen", len([r for r in team_roster if r['Pos'] == 'D']))
-    else:
-        st.info("No teams registered yet!")
+            col2.metric("Forwards", len([r for r in team_roster if r['Pos'] in ['C', 'L', 'R', 'F']]))  # Pitäisi olla 8
+            col3.metric("Defensemen", len([r for r in team_roster if r['Pos'] == 'D']))  # Pitäisi olla 4
+            else:
+                st.info("No teams registered yet!")
 
+# --- COUNTRIES SIVU (MINIMI 3 MANAGERS) ---
 elif page == "Countries":
-    # ... (sama kuin ennen)
     st.header("🌍 Countries Competition")
-    st.write("Managers compete for national pride! Countries with 4+ managers shown separately. Smaller countries grouped as 'Others'.")
+    st.write("Managers compete for national pride! Countries with **3+ managers** appear separately. Smaller countries grouped as 'Others'.")
+    
+    def get_country_leaderboard():
+        """Calculate country leaderboard with 'Others' grouping (min 3 managers)"""
+        teams = get_all_teams()
+        player_map = {p['playerId']: p for p in PLAYERS_DATA}
+        
+        # Collect all points by manager's country
+        country_points = defaultdict(list)
+        
+        for team in teams:
+            manager_country = team.get("manager_country", "OTHERS")
+            total = 0
+            for pid in team.get('player_ids', []):
+                if pid in player_map:
+                    total += player_map[pid]['points']
+            country_points[manager_country].append(total)
+        
+        # Group small countries (<=2 managers) into OTHERS (minimi 3!)
+        final_stats = defaultdict(lambda: {"points": [], "managers": 0, "countries": []})
+        
+        for country, points_list in country_points.items():
+            if len(points_list) < 3:  # Muutettu: <=3 → <3 eli alle 3 = Others
+                final_stats["OTHERS"]["points"].extend(points_list)
+                final_stats["OTHERS"]["managers"] += len(points_list)
+                final_stats["OTHERS"]["countries"].append(country)
+            else:
+                final_stats[country]["points"] = points_list
+                final_stats[country]["managers"] = len(points_list)
+                final_stats[country]["countries"] = [country]
+        
+        # Calculate averages
+        results = []
+        for group_code, data in final_stats.items():
+            if data["managers"] > 0:
+                avg = sum(data["points"]) / len(data["points"]) if data["points"] else 0
+                results.append({
+                    "code": group_code,
+                    "name": "Others" if group_code == "OTHERS" else ALL_COUNTRIES.get(group_code, group_code),
+                    "managers": data["managers"],
+                    "countries": data["countries"],
+                    "avg_points": round(avg, 1),
+                    "total_points": sum(data["points"]),
+                    "best_score": max(data["points"]) if data["points"] else 0
+                })
+        
+        results.sort(key=lambda x: x["avg_points"], reverse=True)
+        return results
     
     country_stats = get_country_leaderboard()
     
@@ -790,7 +1055,7 @@ elif page == "Countries":
             medals = ["🥇", "🥈", "🥉"]
             colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
             
-            for i in range(3):
+            for i in range(min(3, len(country_stats))):
                 stats = country_stats[i]
                 with cols[i]:
                     flag = get_flag(stats['code'])
@@ -806,20 +1071,16 @@ elif page == "Countries":
                     </div>
                     """, unsafe_allow_html=True)
 
-# --- UUSI ADMIN-SIVU ---
+# --- ADMIN SIVU ---
 elif page == "Admin":
     st.header("🔧 Admin Panel")
     
-    # Suojaa salasanalla
     admin_pass = st.text_input("Admin Password", type="password", key="admin_password")
-    
-    # Tarkista salasana secrets:stä tai käytä oletusta
     correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2025")
     
     if admin_pass == correct_password:
         st.success("✅ Admin access granted")
         
-        # Hae kaikki joukkueet
         all_teams = get_all_teams()
         
         st.subheader(f"All Teams ({len(all_teams)} total)")
@@ -827,11 +1088,6 @@ elif page == "Admin":
         if not all_teams:
             st.info("No teams found in database")
         else:
-            # Yhteenveto
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Teams", len(all_teams))
-            
-            # Näytä joukkueet taulukossa
             team_summary = []
             for team in all_teams:
                 team_summary.append({
@@ -846,7 +1102,6 @@ elif page == "Admin":
             st.divider()
             st.subheader("🗑️ Delete Teams")
             
-            # Valitse poistettava joukkue
             team_to_delete = st.selectbox(
                 "Select team to delete:",
                 options=[t['team_name'] for t in all_teams],
@@ -854,13 +1109,11 @@ elif page == "Admin":
             )
             
             if team_to_delete:
-                # Näytä joukkueen tiedot
                 team_data = next((t for t in all_teams if t['team_name'] == team_to_delete), None)
                 if team_data:
                     with st.expander("View Team Details"):
                         st.json(team_data)
                 
-                # Vahvistus
                 confirm = st.checkbox(f"I confirm I want to delete '{team_to_delete}'", key="admin_confirm")
                 
                 if confirm and st.button("🗑️ Permanently Delete", type="primary", key="admin_delete_btn"):
@@ -876,7 +1129,6 @@ elif page == "Admin":
                     else:
                         st.error("❌ Database connection failed")
         
-        # Debug: Näytä raaka data
         st.divider()
         if st.checkbox("Show raw database data"):
             st.json(all_teams)
