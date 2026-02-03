@@ -611,6 +611,7 @@ elif page == "My Team":
                         for idx, p in players_by_country[country]['F']:
                             label = f"{p['firstName']['default']} {p['lastName']['default']}"
                             checkbox_key = f"chk_{country}_{p['playerId']}"
+                            edit_checkbox_key = f"edit_{country}_{idx}"  # Unique key for edit mode
                             
                             country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
                             is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
@@ -618,7 +619,7 @@ elif page == "My Team":
                             
                             checked = st.checkbox(
                                 label, 
-                                key=f"edit_{checkbox_key}",
+                                key=edit_checkbox_key,
                                 value=is_selected,
                                 disabled=disabled
                             )
@@ -638,6 +639,7 @@ elif page == "My Team":
                         for idx, p in players_by_country[country]['D']:
                             label = f"{p['firstName']['default']} {p['lastName']['default']}"
                             checkbox_key = f"chk_{country}_{p['playerId']}"
+                            edit_checkbox_key = f"edit_{country}_{idx}_D"  # Unique key for edit mode
                             
                             country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
                             is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
@@ -645,7 +647,7 @@ elif page == "My Team":
                             
                             checked = st.checkbox(
                                 label, 
-                                key=f"edit_{checkbox_key}",
+                                key=edit_checkbox_key,
                                 value=is_selected,
                                 disabled=disabled
                             )
