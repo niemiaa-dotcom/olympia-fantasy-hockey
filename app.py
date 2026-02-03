@@ -581,7 +581,7 @@ elif page == "Create Team":
         st.write("""
         ### New Rules for 2026 Olympics! 🏒
         
-        - **Select exactly 11 players** (one from each Olympic nation)
+        - **Select 12 players** (one from each Olympic nation)
         - **Minimum 4 defensemen** (D)
         - **Maximum 7 forwards** (F)
         - **Exactly 1 player per country** - you cannot select two players from the same nation!
