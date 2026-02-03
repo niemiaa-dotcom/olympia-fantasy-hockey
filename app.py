@@ -425,118 +425,118 @@ elif page == "Create Team":
         
         col_flag, col_select = st.columns([1, 4])
     
-    with col_select:
-        manager_country = st.selectbox(
-            "Select your country",
-            options=list(ALL_COUNTRIES.keys()),
-            format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}",
-            key="manager_country_select"
-        )
-    
-    with col_flag:
-        st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
-    
-    st.divider()
-    st.subheader("Select Players by Country")
-    
-    # Data prep
-    players_by_country = {}
-    for idx, p in enumerate(PLAYERS_DATA):
-        country = p['teamName']['default']
-        if country not in players_by_country:
-            players_by_country[country] = {'F': [], 'D': []}
+        with col_select:
+            manager_country = st.selectbox(
+                "Select your country",
+                options=list(ALL_COUNTRIES.keys()),
+                format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}",
+                key="manager_country_select"
+            )
         
-        pos = p['position']
-        if pos in ['C', 'L', 'R', 'F']:
-            players_by_country[country]['F'].append((idx, p))
-        elif pos == 'D':
-            players_by_country[country]['D'].append((idx, p))
-
-    sorted_countries = sorted(players_by_country.keys())
-    selected_player_ids = []
-    
-    for country in sorted_countries:
-        flag = get_flag(country)
-        is_olympic = country in OLYMPIC_TEAMS
-        olympic_badge = "🏒" if is_olympic else ""
+        with col_flag:
+            st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
         
-        with st.expander(f"{flag} {country} {olympic_badge}"):
-            col_f, col_d = st.columns(2)
+        st.divider()
+        st.subheader("Select Players by Country")
+        
+        # Data prep
+        players_by_country = {}
+        for idx, p in enumerate(PLAYERS_DATA):
+            country = p['teamName']['default']
+            if country not in players_by_country:
+                players_by_country[country] = {'F': [], 'D': []}
             
-            with col_f:
-                st.markdown("**Forwards**")
-                for idx, p in players_by_country[country]['F']:
-                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    if st.checkbox(label, key=f"chk_f_{country}_{idx}"):
-                        selected_player_ids.append(p['playerId'])
-                        
-            with col_d:
-                st.markdown("**Defensemen**")
-                for idx, p in players_by_country[country]['D']:
-                    label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    if st.checkbox(label, key=f"chk_d_{country}_{idx}"):
-                        selected_player_ids.append(p['playerId'])
-
-    # REAL-TIME Validation
-    stats_counts = {'F': 0, 'D': 0}
-    country_counts = {}
-    player_map = {p['playerId']: p for p in PLAYERS_DATA}
+            pos = p['position']
+            if pos in ['C', 'L', 'R', 'F']:
+                players_by_country[country]['F'].append((idx, p))
+            elif pos == 'D':
+                players_by_country[country]['D'].append((idx, p))
     
-    for pid in selected_player_ids:
-        p = player_map[pid]
-        pos = 'D' if p['position'] == 'D' else 'F'
-        stats_counts[pos] += 1
-        ctry = p['teamName']['default']
-        country_counts[ctry] = country_counts.get(ctry, 0) + 1
-
-    st.divider()
-    st.subheader("Draft Status")
-    
-    s1, s2, s3 = st.columns(3)
-    f_color = "green" if stats_counts['F'] == 7 else "red"
-    s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
-    
-    d_color = "green" if stats_counts['D'] == 3 else "red"
-    s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
-    
-    violation_countries = [c for c, count in country_counts.items() if count > 1]
-    if not violation_countries:
-        s3.markdown("1-Player/Nation: :green[**OK**]")
-    else:
-        s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
-
-    st.divider()
-    submit = st.button("💾 Save Team", type="primary", key="save_team_btn")
-    
-    if submit:
-            errors = []
+        sorted_countries = sorted(players_by_country.keys())
+        selected_player_ids = []
+        
+        for country in sorted_countries:
+            flag = get_flag(country)
+            is_olympic = country in OLYMPIC_TEAMS
+            olympic_badge = "🏒" if is_olympic else ""
             
-            if not team_name:
-                errors.append("Missing Team Name.")
-            if not pin or len(pin) < 4:
-                errors.append("Invalid PIN.")
-            if stats_counts['F'] != 7:
-                errors.append(f"Need 7 Forwards (Selected: {stats_counts['F']}).")
-            if stats_counts['D'] != 3:
-                errors.append(f"Need 3 Defensemen (Selected: {stats_counts['D']}).")
-            if violation_countries:
-                errors.append(f"Multiple players from: {', '.join(violation_countries)}")
-            
-            if errors:
-                for e in errors:
-                    st.error(e)
-            else:
-                success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
-                if success:
-                    st.balloons()
-                    st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
+            with st.expander(f"{flag} {country} {olympic_badge}"):
+                col_f, col_d = st.columns(2)
+                
+                with col_f:
+                    st.markdown("**Forwards**")
+                    for idx, p in players_by_country[country]['F']:
+                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                        if st.checkbox(label, key=f"chk_f_{country}_{idx}"):
+                            selected_player_ids.append(p['playerId'])
+                            
+                with col_d:
+                    st.markdown("**Defensemen**")
+                    for idx, p in players_by_country[country]['D']:
+                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                        if st.checkbox(label, key=f"chk_d_{country}_{idx}"):
+                            selected_player_ids.append(p['playerId'])
+    
+        # REAL-TIME Validation
+        stats_counts = {'F': 0, 'D': 0}
+        country_counts = {}
+        player_map = {p['playerId']: p for p in PLAYERS_DATA}
+        
+        for pid in selected_player_ids:
+            p = player_map[pid]
+            pos = 'D' if p['position'] == 'D' else 'F'
+            stats_counts[pos] += 1
+            ctry = p['teamName']['default']
+            country_counts[ctry] = country_counts.get(ctry, 0) + 1
+    
+        st.divider()
+        st.subheader("Draft Status")
+        
+        s1, s2, s3 = st.columns(3)
+        f_color = "green" if stats_counts['F'] == 7 else "red"
+        s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
+        
+        d_color = "green" if stats_counts['D'] == 3 else "red"
+        s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
+        
+        violation_countries = [c for c, count in country_counts.items() if count > 1]
+        if not violation_countries:
+            s3.markdown("1-Player/Nation: :green[**OK**]")
+        else:
+            s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
+    
+        st.divider()
+        submit = st.button("💾 Save Team", type="primary", key="save_team_btn")
+        
+        if submit:
+                errors = []
+                
+                if not team_name:
+                    errors.append("Missing Team Name.")
+                if not pin or len(pin) < 4:
+                    errors.append("Invalid PIN.")
+                if stats_counts['F'] != 7:
+                    errors.append(f"Need 7 Forwards (Selected: {stats_counts['F']}).")
+                if stats_counts['D'] != 3:
+                    errors.append(f"Need 3 Defensemen (Selected: {stats_counts['D']}).")
+                if violation_countries:
+                    errors.append(f"Multiple players from: {', '.join(violation_countries)}")
+                
+                if errors:
+                    for e in errors:
+                        st.error(e)
                 else:
-                    st.error(msg)
-
-
-# 12 maata, joista jokaisesta täsmälleen 1 pelaaja
-OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
-                 "SVK", "SWE", "SUI", "USA"]
+                    success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
+                    if success:
+                        st.balloons()
+                        st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
+                    else:
+                        st.error(msg)
+    
+    
+    # 12 maata, joista jokaisesta täsmälleen 1 pelaaja
+    OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
+                     "SVK", "SWE", "SUI", "USA"]
 
 
 # --- COUNTRIES SIVU ---
