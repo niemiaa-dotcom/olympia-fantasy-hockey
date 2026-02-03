@@ -377,6 +377,14 @@ def clear_all_cache():
         st.error(f"Error clearing cache: {e}")
         return False
 
+
+
+# --- UI ---
+st.title("🏒 Olympics Fantasy Hockey 2025")
+st.caption("Keeping Karlsson Community Fantasy Game")
+
+PLAYERS_DATA = get_all_players_data()
+
 # --- SIDEBAR CONTROLS ---
 with st.sidebar:
     st.divider()
@@ -401,12 +409,6 @@ with st.sidebar:
     if st.checkbox("Show debug info"):
         st.write(f"Cache key: {datetime.now().strftime('%H:%M:%S')}")
         st.write(f"Players loaded: {len(PLAYERS_DATA)}")
-
-# --- UI ---
-st.title("🏒 Olympics Fantasy Hockey 2025")
-st.caption("Keeping Karlsson Community Fantasy Game")
-
-PLAYERS_DATA = get_all_players_data()
 
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
 
