@@ -10,7 +10,7 @@ import unicodedata
 from collections import defaultdict
 
 # --- SETTINGS ---
-st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
+st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
 
 # --- COUNTRY FLAGS & LIST ---
 COUNTRY_FLAGS = {
@@ -83,11 +83,11 @@ def clean_name(name):
 
 @st.cache_data(ttl=300)
 def fetch_live_scoring_by_name():
-    start_date = "2026-02-12"
-    end_date = "2026-02-22"
+    start_date = "2025-02-12"
+    end_date = "2025-02-22"
     live_stats = {}
     
-    if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
+    if datetime.now() < datetime.strptime("2025-02-01", "%Y-%m-%d"):
         return {}
 
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
@@ -276,7 +276,7 @@ def get_country_leaderboard():
     return results
 
 # --- UI ---
-st.title("🏒 Olympics Fantasy Hockey 2026")
+st.title("🏒 Olympics Fantasy Hockey 2025")
 st.caption("Keeping Karlsson Community Fantasy Game")
 
 PLAYERS_DATA = get_all_players_data()
@@ -285,7 +285,7 @@ page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard"
 
 if page == "Home":
     st.write("""
-    ## Welcome to Olympics Fantasy Hockey 2026!
+    ## Welcome to Olympics Fantasy Hockey 2025!
     
     ### New: Countries Competition! 🌍
     Managers compete not only individually but also for their country's honor!
