@@ -407,23 +407,23 @@ elif page == "Create Team":
     # ... (sama kuin ennen, mutta korjattu checkbox-key)
     st.header("📝 Create Your Olympic Roster")
     
-with st.expander("ℹ️ Rules", expanded=True):
-    st.write("""
-    ### Olympics Fantasy Hockey 2026! 🏒
+    with st.expander("ℹ️ Rules", expanded=True):
+        st.write("""
+        ### Olympics Fantasy Hockey 2026! 🏒
+        
+        - **Select exactly 12 players** (one from each of the 12 Olympic nations)
+        - **Exactly 4 defensemen** (D) and **8 forwards** (F)
+        - **Exactly 1 player per country** - you cannot select two players from the same nation!
+        - Select your **manager nationality** for country competition!
+        """)
     
-    - **Select exactly 12 players** (one from each of the 12 Olympic nations)
-    - **Exactly 4 defensemen** (D) and **8 forwards** (F)
-    - **Exactly 1 player per country** - you cannot select two players from the same nation!
-    - Select your **manager nationality** for country competition!
-    """)
-
-    col1, col2 = st.columns(2)
-    team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
-    pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits", key="pin_input")
-    
-    st.subheader("🌍 Manager Nationality")
-    
-    col_flag, col_select = st.columns([1, 4])
+        col1, col2 = st.columns(2)
+        team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice", key="team_name_input")
+        pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits", key="pin_input")
+        
+        st.subheader("🌍 Manager Nationality")
+        
+        col_flag, col_select = st.columns([1, 4])
     
     with col_select:
         manager_country = st.selectbox(
