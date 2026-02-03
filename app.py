@@ -83,151 +83,130 @@ def clean_name(name):
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
     return n.lower().strip()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def fetch_live_scoring_by_name():
-    # 4 Nations -turnauksen päivämäärät (helmikuu 2025)
     start_date = "2025-02-12"
     end_date = "2025-02-20"
     live_stats = {}
     
-    # Poista tai kommentoi pois tämä tarkistus testausta varten
+    # Poista päivämäärächeck väliaikaisesti
     # if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
     #     return {}
     
-    # Debug-laskurit
-    games_found = 0
-    players_found = 0
-    api_errors = 0
-    
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
     
-    # DEBUG: Tulosta aloitustiedot
-    print(f"\n{'='*60}")
-    print(f"🔍 FETCH LIVE SCORING - DEBUG MODE")
-    print(f"Date range: {start_date} to {end_date}")
-    print(f"Checking {len(dates)} days...")
-    print(f"{'='*60}\n")
+    # DEBUG: Näytä Streamlitissä
+    debug_container = st.empty()
+    debug_logs = []
+    
+    def log(msg):
+        debug_logs.append(msg)
+        debug_container.code("\n".join(debug_logs[-20:]), language="bash")  # Näytä viimeiset 20 riviä
+    
+    log(f"🔍 Starting fetch for {len(dates)} days")
+    log(f"Today is: {datetime.now().strftime('%Y-%m-%d')}")
     
     for date_str in dates:
-        # Skip future dates
         if date_str > datetime.now().strftime('%Y-%m-%d'):
-            print(f"⏭️  {date_str}: Future date, skipping")
+            log(f"⏭️  Skipping future date: {date_str}")
             continue
             
         try:
             schedule_url = f"https://api-web.nhle.com/v1/schedule/{date_str}"
-            print(f"\n📅 Checking date: {date_str}")
-            print(f"   URL: {schedule_url}")
+            log(f"\n📅 {date_str}: Fetching schedule...")
             
             r = requests.get(schedule_url, timeout=5)
-            print(f"   Response status: {r.status_code}")
+            log(f"   Status: {r.status_code}")
             
             if r.status_code != 200:
-                print(f"   ❌ API error: Status {r.status_code}")
-                api_errors += 1
+                log(f"   ❌ HTTP Error {r.status_code}")
                 continue
-                
+            
             data = r.json()
             game_week = data.get('gameWeek', [])
-            print(f"   Days in gameWeek: {len(game_week)}")
+            log(f"   gameWeek days: {len(game_week)}")
             
-            day_data = next((d for d in game_week if d['date'] == date_str), None)
+            day_data = next((d for d in game_week if d.get('date') == date_str), None)
             
             if not day_data:
-                print(f"   ⚠️  No data found for {date_str}")
+                log(f"   ⚠️  No day_data found")
                 continue
-                
-            games = day_data.get('games', [])
-            print(f"   🎮 Total games: {len(games)}")
             
-            for game in games:
+            games = day_data.get('games', [])
+            log(f"   🎮 Games found: {len(games)}")
+            
+            tournament_games = [g for g in games if g.get('gameType') == 9]
+            log(f"   🏒 Tournament games (type=9): {len(tournament_games)}")
+            
+            for game in tournament_games:
                 game_id = game.get('id')
-                game_type = game.get('gameType')
-                game_state = game.get('gameState')
+                away = game.get('awayTeam', {}).get('abbrev')
+                home = game.get('homeTeam', {}).get('abbrev')
+                log(f"\n   📊 Game {game_id}: {away} @ {home}")
                 
-                print(f"\n   🏒 Game ID: {game_id}")
-                print(f"      Type: {game_type} (9 = Tournament)")
-                print(f"      State: {game_state}")
-                print(f"      Teams: {game.get('awayTeam', {}).get('abbrev')} @ {game.get('homeTeam', {}).get('abbrev')}")
-                
-                # 4 Nations ja Olympics = gameType 9
-                if game_type == 9:
-                    games_found += 1
-                    away_abbr = game.get('awayTeam', {}).get('abbrev')
-                    home_abbr = game.get('homeTeam', {}).get('abbrev')
+                box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
+                try:
+                    box = requests.get(box_url, timeout=5).json()
                     
-                    box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
-                    print(f"      📊 Fetching boxscore: {box_url}")
-                    
-                    try:
-                        box = requests.get(box_url, timeout=5).json()
+                    for team_type, country in [('awayTeam', away), ('homeTeam', home)]:
+                        team_data = box.get('playerByGameStats', {}).get(team_type, {})
                         
-                        for team_type, country_code in [('awayTeam', away_abbr), ('homeTeam', home_abbr)]:
-                            print(f"         Processing {team_type} ({country_code})...")
+                        for group in ['forwards', 'defense', 'goalies']:
+                            players = team_data.get(group, [])
+                            scorers = [p for p in players if p.get('goals', 0) > 0 or p.get('assists', 0) > 0]
                             
-                            for group in ['forwards', 'defense', 'goalies']:
-                                players = box.get('playerByGameStats', {}).get(team_type, {}).get(group, [])
-                                print(f"            {group}: {len(players)} players")
+                            if scorers:
+                                log(f"      {country} {group}: {len(scorers)} scorers")
+                                for p in scorers[:3]:  # Näytä max 3 per ryhmä
+                                    name = p.get('name', {}).get('default', 'Unknown')
+                                    g = p.get('goals', 0)
+                                    a = p.get('assists', 0)
+                                    log(f"         {name}: {g}G {a}A")
+                            
+                            for p in players:
+                                name = p.get('name', {}).get('default', '')
+                                if not name:
+                                    fn = p.get('firstName', {}).get('default', '')
+                                    ln = p.get('lastName', {}).get('default', '')
+                                    name = f"{fn} {ln}"
                                 
-                                for p in players:
-                                    full_name = p.get('name', {}).get('default')
-                                    if not full_name:
-                                        fn = p.get('firstName', {}).get('default', '')
-                                        ln = p.get('lastName', {}).get('default', '')
-                                        full_name = f"{fn} {ln}"
-                                    
-                                    key = f"{clean_name(full_name)}_{clean_name(country_code)}"
-                                    
-                                    goals = int(p.get('goals', 0))
-                                    assists = int(p.get('assists', 0))
-                                    
-                                    # DEBUG: Tulosta jokainen pelaaja
-                                    if goals > 0 or assists > 0:
-                                        print(f"            ⭐ {full_name} ({country_code}): G={goals}, A={assists}")
-                                    
-                                    if key not in live_stats:
-                                        live_stats[key] = {'goals': 0, 'assists': 0}
-                                        players_found += 1
-                                    
-                                    live_stats[key]['goals'] += goals
-                                    live_stats[key]['assists'] += assists
-                                    
-                    except Exception as box_err:
-                        print(f"      ❌ Boxscore error: {box_err}")
-                        api_errors += 1
-                        
+                                key = f"{clean_name(name)}_{clean_name(country)}"
+                                
+                                if key not in live_stats:
+                                    live_stats[key] = {'goals': 0, 'assists': 0}
+                                
+                                live_stats[key]['goals'] += int(p.get('goals', 0))
+                                live_stats[key]['assists'] += int(p.get('assists', 0))
+                                
+                except Exception as e:
+                    log(f"   ❌ Boxscore error: {str(e)[:50]}")
+                    
         except Exception as e:
-            print(f"   ❌ Schedule error: {e}")
-            api_errors += 1
+            log(f"   ❌ Schedule error: {str(e)[:50]}")
             continue
     
-    # DEBUG: Yhteenveto
-    print(f"\n{'='*60}")
-    print(f"📊 SUMMARY")
-    print(f"{'='*60}")
-    print(f"Games processed: {games_found}")
-    print(f"Unique players: {players_found}")
-    print(f"API errors: {api_errors}")
-    print(f"Stats collected: {len(live_stats)} players")
+    log(f"\n{'='*40}")
+    log(f"SUMMARY: {len(live_stats)} players with stats")
     
     if live_stats:
-        print(f"\n🏆 Top scorers found:")
-        sorted_stats = sorted(live_stats.items(), key=lambda x: x[1]['goals'] + x[1]['assists'], reverse=True)[:10]
-        for name, stats in sorted_stats:
-            total = stats['goals'] + stats['assists']
-            print(f"   {name}: {stats['goals']}G + {stats['assists']}A = {total}pts")
+        top = sorted(live_stats.items(), key=lambda x: x[1]['goals']+x[1]['assists'], reverse=True)[:5]
+        log("Top 5 scorers:")
+        for name, stats in top:
+            log(f"  {name}: {stats['goals']}G {stats['assists']}A")
     else:
-        print(f"\n⚠️  No stats collected - API may not have 4 Nations data")
-    
-    print(f"{'='*60}\n")
+        log("⚠️  NO STATS FOUND - API may have removed 4 Nations data")
     
     return live_stats
+
+
 @st.cache_data(ttl=60)
 def get_all_players_data():
+    # Lataa perusrosteri
     try:
         df = pd.read_csv("olympic_players.csv")
         base_roster = df.to_dict('records')
-    except Exception:
+        csv_loaded = True
+    except Exception as e:
         # Fallback test data
         base_roster = [
             {"firstName": "Connor", "lastName": "McDavid", "teamName": "CAN", "position": "F"},
@@ -250,8 +229,15 @@ def get_all_players_data():
             {"firstName": "Roman", "lastName": "Josi", "teamName": "SUI", "position": "D"},
             {"firstName": "Kevin", "lastName": "Fiala", "teamName": "SUI", "position": "F"},
         ]
+        csv_loaded = False
 
+    # Hae live-pisteet
     live_scores = fetch_live_scoring_by_name()
+    
+    # Debug-muuttujat
+    matched_players = 0
+    total_points = 0
+    sample_matches = []
     
     final_list = []
     for player in base_roster:
@@ -265,6 +251,13 @@ def get_all_players_data():
         
         stats = live_scores.get(search_key, {'goals': 0, 'assists': 0})
         
+        # Debug: Kerää tietoja täsmäävistä
+        if stats['goals'] > 0 or stats['assists'] > 0:
+            matched_players += 1
+            total_points += stats['goals'] + stats['assists']
+            if len(sample_matches) < 5:
+                sample_matches.append(f"{full_name} ({country}): {stats['goals']}G {stats['assists']}A")
+        
         final_list.append({
             "playerId": search_key,
             "firstName": {"default": f_name},
@@ -275,6 +268,20 @@ def get_all_players_data():
             "assists": stats['assists'],
             "points": stats['goals'] + stats['assists']
         })
+    
+    # Debug-tulosteet (näkyvät sidebarissa jos lisäät kutsun)
+    debug_info = {
+        "csv_loaded": csv_loaded,
+        "csv_players": len(base_roster),
+        "api_players_with_stats": len(live_scores),
+        "matched_in_roster": matched_players,
+        "total_points": total_points,
+        "sample_matches": sample_matches
+    }
+    
+    # Tallenna session stateen myöhempää käyttöä varten
+    st.session_state['player_data_debug'] = debug_info
+    
     return final_list
 
 def hash_pin(pin):
@@ -385,30 +392,26 @@ st.caption("Keeping Karlsson Community Fantasy Game")
 
 PLAYERS_DATA = get_all_players_data()
 
-# --- SIDEBAR CONTROLS ---
+    
+
 with st.sidebar:
-    st.divider()
-    st.subheader("⚙️ Settings")
-    
-    # Debug mode toggle
-    if st.toggle("Debug Mode", value=False, key="debug_toggle"):
-        st.info("Cache TTL: 60s")
-        # Clear cache immediately when enabling debug
-        if 'debug_enabled' not in st.session_state:
-            clear_all_cache()
-            st.session_state.debug_enabled = True
-    
-    # Manual refresh
-    if st.button("🔄 Force Refresh", use_container_width=True, type="primary"):
-        with st.spinner("Fetching fresh data..."):
-            if clear_all_cache():
-                st.success("Data refreshed!")
-                st.rerun()
-    
-    # Show cache info
-    if st.checkbox("Show debug info"):
-        st.write(f"Cache key: {datetime.now().strftime('%H:%M:%S')}")
-        st.write(f"Players loaded: {len(PLAYERS_DATA)}")
+    if st.checkbox("🔍 Player Data Debug", value=False):
+        if 'player_data_debug' in st.session_state:
+            d = st.session_state['player_data_debug']
+            st.write(f"📁 CSV loaded: {d['csv_loaded']}")
+            st.write(f"👥 CSV players: {d['csv_players']}")
+            st.write(f"📡 API players with stats: {d['api_players_with_stats']}")
+            st.write(f"✅ Matched in roster: {d['matched_in_roster']}")
+            st.write(f"📊 Total points: {d['total_points']}")
+            
+            if d['sample_matches']:
+                st.write("🌟 Sample matches:")
+                for match in d['sample_matches']:
+                    st.text(match)
+            else:
+                st.warning("No matches found!")
+        else:
+            st.info("Refresh to load debug data")
 
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
 
