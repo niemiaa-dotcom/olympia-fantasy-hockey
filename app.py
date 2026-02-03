@@ -378,6 +378,30 @@ with st.sidebar:
                 st.warning("No matches found!")
         else:
             st.info("No debug data available. Refresh to load.")
+
+elif page == "Admin":  # Lisää tämä sivuvalikkoon
+    st.header("🔧 Admin Panel")
+    
+    # Suojaa salasanalla
+    admin_pass = st.text_input("Admin Password", type="password")
+    
+    if admin_pass == st.secrets.get("ADMIN_PASSWORD", "olympics2025"):  # Aseta salasana secrets:iin
+        all_teams = get_all_teams()
+        
+        st.write(f"Total teams: {len(all_teams)}")
+        
+        for team in all_teams:
+            with st.expander(f"{team['team_name']} ({team.get('manager_country', 'N/A')})"):
+                st.json(team)
+                if st.button(f"🗑️ Delete {team['team_name']}", key=f"del_{team['team_name']}"):
+                    db = get_db()
+                    if db:
+                        db.collection("teams").document(team['team_name']).delete()
+                        st.success("Deleted!")
+                        st.rerun()
+    else:
+        st.warning("Enter admin password")
+
 page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
 
 if page == "Home":
@@ -543,6 +567,35 @@ elif page == "My Team":
             
             st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
             
+            # --- POISTO-TOIMINTO ---
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col3:
+                if st.button("🗑️ Delete Team", type="secondary", help="Permanently delete this team"):
+                    st.session_state['confirm_delete'] = True
+            
+            if st.session_state.get('confirm_delete'):
+                st.warning("⚠️ Are you sure? This cannot be undone!")
+                conf_col1, conf_col2 = st.columns(2)
+                with conf_col1:
+                    if st.button("✅ Yes, Delete", type="primary", key="confirm_yes"):
+                        # Poista Firebase:stä
+                        db = get_db()
+                        if db:
+                            try:
+                                db.collection("teams").document(login_name).delete()
+                                st.success(f"Team '{login_name}' deleted!")
+                                st.session_state['confirm_delete'] = False
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error deleting: {e}")
+                        else:
+                            st.error("Database connection failed")
+                with conf_col2:
+                    if st.button("❌ Cancel", key="confirm_no"):
+                        st.session_state['confirm_delete'] = False
+                        st.rerun()
+            
+            # --- ROSTERIN NÄYTTÖ ---
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
             team_roster = []
