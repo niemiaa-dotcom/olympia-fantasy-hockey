@@ -351,129 +351,9 @@ PLAYERS_DATA = get_all_players_data()
 # --- SIDEBAR ---
 with st.sidebar:
     st.divider()
-    st.subheader("🎨 Theme")
     
-    # Theme selector
-    if 'theme' not in st.session_state:
-        st.session_state['theme'] = 'Light'
-    
-    theme_options = {
-        'Light': {'primary': '#FF4B4B', 'bg': '#FFFFFF', 'secondary_bg': '#F0F2F6', 'text': '#262730'},
-        'Dark': {'primary': '#FF4B4B', 'bg': '#0E1117', 'secondary_bg': '#262730', 'text': '#FAFAFA'},
-        'Ice': {'primary': '#00D4FF', 'bg': '#E8F4F8', 'secondary_bg': '#D0E8F0', 'text': '#1A3A52'},
-        'Fire': {'primary': '#FF6B35', 'bg': '#1A1A2E', 'secondary_bg': '#16213E', 'text': '#E8E8E8'}
-    }
-    
-    selected_theme = st.selectbox(
-        "Select Theme",
-        options=list(theme_options.keys()),
-        index=list(theme_options.keys()).index(st.session_state.get('theme', 'Light')),
-        key='theme_selector'
-    )
-    
-    st.session_state['theme'] = selected_theme
-    theme = theme_options[selected_theme]
-    
-    # Theme preview
-    st.caption(f"🎨 {selected_theme} Theme Active")
-    
-    # Apply custom CSS based on theme
-    st.markdown(f"""
-    <style>
-        /* Main theme colors */
-        .stApp {{
-            background-color: {theme['bg']};
-        }}
-        
-        /* Metric styling */
-        [data-testid="stMetricValue"] {{
-            color: {theme['primary']};
-            font-size: 2rem;
-            font-weight: bold;
-        }}
-        
-        /* Card-like containers */
-        .stMarkdown {{
-            color: {theme['text']};
-        }}
-        
-        /* Buttons */
-        .stButton>button {{
-            border-radius: 8px;
-            font-weight: 600;
-        }}
-        
-        /* Dataframe headers */
-        .stDataFrame {{
-            border-radius: 10px;
-        }}
-        
-        /* Expander styling */
-        .streamlit-expanderHeader {{
-            background-color: {theme['secondary_bg']};
-            border-radius: 8px;
-            font-weight: 600;
-        }}
-        
-        /* Sidebar */
-        [data-testid="stSidebar"] {{
-            background-color: {theme['secondary_bg']};
-        }}
-        
-        /* Headers with glow effect for special themes */
-        h1, h2, h3 {{
-            color: {theme['text']};
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.divider()
-    st.subheader("⚙️ Debug & Settings")
-    
-    if st.button("🔄 Force Refresh", use_container_width=True, type="primary"):
-        with st.spinner("Fetching fresh data..."):
-            if clear_all_cache():
-                st.success("Cache cleared! Reloading...")
-                st.rerun()
-    
-    if st.checkbox("🔍 Show Debug Info", value=True):
-        if 'player_data_debug' in st.session_state:
-            d = st.session_state['player_data_debug']
-            
-            st.text("SUMMARY:")
-            st.text(f"📁 CSV loaded: {d.get('csv_loaded', 'N/A')}")
-            st.text(f"👥 CSV players: {d.get('csv_players', 0)}")
-            st.text(f"📡 API players: {d.get('api_players_with_stats', 0)}")
-            st.text(f"✅ Matched: {d.get('matched_in_roster', 0)}")
-            st.text(f"📊 Total pts: {d.get('total_points', 0)}")
-            
-            st.divider()
-            st.text("API SAMPLE KEYS (first 10):")
-            for key in d.get('api_sample_keys', [])[:10]:
-                st.code(key)
-            
-            if d.get('debug_comparison'):
-                st.divider()
-                st.text("KEY COMPARISON:")
-                for comp in d['debug_comparison'][:5]:
-                    status = "✅" if comp.get('found') else "❌"
-                    st.text(f"{status} {comp.get('name')} ({comp.get('country')})")
-                    st.text(f"   Short: {comp.get('short_key')}")
-                    if comp.get('found'):
-                        st.text(f"   Stats: {comp.get('stats', {})}")
-            
-            if d.get('sample_matches'):
-                st.divider()
-                st.text("🌟 MATCHES WITH POINTS:")
-                for match in d['sample_matches']:
-                    st.text(match)
-            else:
-                st.warning("No matches found!")
-        else:
-            st.info("No debug data available. Refresh to load.")
-
-# --- PAGE NAVIGATION (LISÄÄ ADMIN TÄHÄN) ---
-page = st.sidebar.radio("Menu", ["🏠 Home", "✏️ Create Team", "👤 My Team", "🏆 Leaderboard", "🌍 Countries", "⚙️ Admin"])
+    # Simple navigation
+    page = st.sidebar.radio("Menu", ["🏠 Home", "✏️ Create Team", "👤 My Team", "🏆 Leaderboard", "🌍 Countries", "⚙️ Admin"])
 
 # --- SESSION STATE FOR DELETE CONFIRMATION ---
 if 'confirm_delete' not in st.session_state:
@@ -1383,9 +1263,80 @@ elif page == "⚙️ Admin":
     if admin_pass == correct_password:
         st.success("✅ Admin access granted")
         
+        # System Controls
+        st.divider()
+        st.subheader("🛠️ System Controls")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 Force Refresh Data", use_container_width=True, type="primary"):
+                with st.spinner("Fetching fresh data from API..."):
+                    if clear_all_cache():
+                        st.success("✅ Cache cleared! Data refreshed.")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to clear cache")
+        
+        with col2:
+            if st.button("🔄 Reload Page", use_container_width=True, type="secondary"):
+                st.rerun()
+        
+        # Debug Information
+        st.divider()
+        st.subheader("🔍 Debug Information")
+        
+        with st.expander("📊 Player Data Debug", expanded=False):
+            if 'player_data_debug' in st.session_state:
+                d = st.session_state['player_data_debug']
+                
+                # Summary metrics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("CSV Players", d.get('csv_players', 0))
+                with col2:
+                    st.metric("API Players", d.get('api_players_with_stats', 0))
+                with col3:
+                    st.metric("Matched", d.get('matched_in_roster', 0))
+                with col4:
+                    st.metric("Total Points", d.get('total_points', 0))
+                
+                st.divider()
+                
+                # API Sample Keys
+                st.markdown("**API Sample Keys (first 10):**")
+                for key in d.get('api_sample_keys', [])[:10]:
+                    st.code(key, language=None)
+                
+                # Key Comparison
+                if d.get('debug_comparison'):
+                    st.divider()
+                    st.markdown("**Key Comparison:**")
+                    for comp in d['debug_comparison'][:5]:
+                        status = "✅" if comp.get('found') else "❌"
+                        st.text(f"{status} {comp.get('name')} ({comp.get('country')})")
+                        st.text(f"   Short Key: {comp.get('short_key')}")
+                        if comp.get('found'):
+                            st.text(f"   Stats: {comp.get('stats', {})}")
+                
+                # Matches with Points
+                if d.get('sample_matches'):
+                    st.divider()
+                    st.markdown("**🌟 Matches with Points:**")
+                    for match in d['sample_matches']:
+                        st.text(match)
+                else:
+                    st.warning("No matches found!")
+            else:
+                st.info("No debug data available. Click 'Force Refresh Data' to load.")
+        
+        # Team Management
+        st.divider()
+        st.subheader("👥 Team Management")
+        
         all_teams = get_all_teams()
         
-        st.subheader(f"All Teams ({len(all_teams)} total)")
+        st.markdown(f"**Total Teams: {len(all_teams)}**")
         
         if not all_teams:
             st.info("No teams found in database")
@@ -1432,7 +1383,7 @@ elif page == "⚙️ Admin":
                         st.error("❌ Database connection failed")
         
         st.divider()
-        if st.checkbox("Show raw database data"):
+        with st.expander("📦 Raw Database Data", expanded=False):
             st.json(all_teams)
             
     elif admin_pass:
