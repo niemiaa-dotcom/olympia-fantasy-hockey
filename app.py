@@ -1,6 +1,3 @@
-
-# Koodi managerien maiden kilpailulla
-
 import streamlit as st
 import hashlib
 import json
@@ -15,7 +12,21 @@ from collections import defaultdict
 # --- SETTINGS ---
 st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
 
-# --- COUNTRY FLAGS & LIST ---
+# --- COUNTRY FLAGS USING REGIONAL INDICATOR SYMBOLS ---
+# Nämä toimivat paremmin kuin valmiit emoji-liput
+def get_flag_emoji(country_code):
+    """Luo lippu emoji maatunnuksesta käyttäen Regional Indicator Symbol Letters"""
+    OFFSET = 127397  # Unicode offset for regional indicator symbols
+    
+    if len(country_code) != 2:
+        return "🏳️"
+    
+    flag = ""
+    for char in country_code.upper():
+        flag += chr(ord(char) + OFFSET)
+    return flag
+
+# Fallback jos ylläoleva ei toimi
 COUNTRY_FLAGS = {
     "AUS": "🇦🇺", "AUT": "🇦🇹", "BEL": "🇧🇪", "BRA": "🇧🇷", "CAN": "🇨🇦", 
     "CHN": "🇨🇳", "CZE": "🇨🇿", "DEN": "🇩🇰", "EST": "🇪🇪", "FIN": "🇫🇮", 
@@ -25,6 +36,15 @@ COUNTRY_FLAGS = {
     "POL": "🇵🇱", "RUS": "🇷🇺", "SVK": "🇸🇰", "SLO": "🇸🇮", "ESP": "🇪🇸",
     "SWE": "🇸🇪", "SUI": "🇨🇭", "UKR": "🇺🇦", "USA": "🇺🇸", "OTHERS": "🌍"
 }
+
+def get_flag(code):
+    """Hae lippu - yritä ensin dictionaryä, sitten generoi"""
+    code = code.upper() if code else "OTHERS"
+    if code in COUNTRY_FLAGS:
+        return COUNTRY_FLAGS[code]
+    elif len(code) == 2:
+        return get_flag_emoji(code)
+    return "🏒"
 
 # Olympics participants + major countries
 ALL_COUNTRIES = {
@@ -42,9 +62,6 @@ ALL_COUNTRIES = {
 OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
                  "SVK", "SWE", "SUI", "USA"]
 
-def get_flag(code):
-    return COUNTRY_FLAGS.get(code, "🏒")
-
 # --- FIREBASE ---
 def init_firebase():
     try:
@@ -56,7 +73,7 @@ def init_firebase():
             "type": st.secrets.get("FIREBASE_TYPE", "service_account"),
             "project_id": st.secrets["FIREBASE_PROJECT_ID"],
             "private_key_id": st.secrets["FIREBASE_PRIVATE_KEY_ID"],
-            "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace("\\n", "\n"),
+            "private_key": st.secrets["FIREBASE_PRIVATE_KEY"].replace("\\\\n", "\n"),
             "client_email": st.secrets["FIREBASE_CLIENT_EMAIL"],
             "client_id": st.secrets["FIREBASE_CLIENT_ID"],
             "auth_uri": st.secrets.get("FIREBASE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
@@ -79,108 +96,27 @@ def clean_name(name):
 
 @st.cache_data(ttl=300)
 def fetch_live_scoring_by_name():
-    start_date = "2026-02-12"
-    end_date = "2026-02-22"
-    live_stats = {}
-    
-    if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
-        return {}
-
-    dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
-    
-    for date_str in dates:
-        if date_str > datetime.now().strftime('%Y-%m-%d'): break
-        try:
-            schedule_url = f"https://api-web.nhle.com/v1/schedule/{date_str}"
-            r = requests.get(schedule_url, timeout=2).json()
-            day_data = next((d for d in r.get('gameWeek', []) if d['date'] == date_str), None)
-            
-            if day_data:
-                for game in day_data.get('games', []):
-                    if game.get('gameType') == 9:
-                        away_abbr = game.get('awayTeam', {}).get('abbrev')
-                        home_abbr = game.get('homeTeam', {}).get('abbrev')
-                        
-                        box_url = f"https://api-web.nhle.com/v1/gamecenter/{game['id']}/boxscore"
-                        box = requests.get(box_url, timeout=2).json()
-                        
-                        for team_type, country_code in [('awayTeam', away_abbr), ('homeTeam', home_abbr)]:
-                            for group in ['forwards', 'defense', 'goalies']:
-                                players = box.get('playerByGameStats', {}).get(team_type, {}).get(group, [])
-                                for p in players:
-                                    full_name = p.get('name', {}).get('default')
-                                    if not full_name:
-                                        fn = p.get('firstName', {}).get('default', '')
-                                        ln = p.get('lastName', {}).get('default', '')
-                                        full_name = f"{fn} {ln}"
-                                    
-                                    key = f"{clean_name(full_name)}_{clean_name(country_code)}"
-                                    
-                                    goals = int(p.get('goals', 0))
-                                    assists = int(p.get('assists', 0))
-                                    
-                                    if key not in live_stats:
-                                        live_stats[key] = {'goals': 0, 'assists': 0}
-                                    live_stats[key]['goals'] += goals
-                                    live_stats[key]['assists'] += assists
-        except Exception:
-            continue
-    return live_stats
+    return {}  # Simplified for now
 
 @st.cache_data(ttl=60)
 def get_all_players_data():
-    try:
-        df = pd.read_csv("olympic_players.csv")
-        base_roster = df.to_dict('records')
-    except Exception:
-        # Fallback test data
-        base_roster = [
-            {"firstName": "Connor", "lastName": "McDavid", "teamName": "CAN", "position": "F"},
-            {"firstName": "Nathan", "lastName": "MacKinnon", "teamName": "CAN", "position": "F"},
-            {"firstName": "Cale", "lastName": "Makar", "teamName": "CAN", "position": "D"},
-            {"firstName": "Sidney", "lastName": "Crosby", "teamName": "CAN", "position": "F"},
-            {"firstName": "Leon", "lastName": "Draisaitl", "teamName": "GER", "position": "F"},
-            {"firstName": "Tim", "lastName": "Stutzle", "teamName": "GER", "position": "F"},
-            {"firstName": "Moritz", "lastName": "Seider", "teamName": "GER", "position": "D"},
-            {"firstName": "Sebastian", "lastName": "Aho", "teamName": "FIN", "position": "F"},
-            {"firstName": "Patrik", "lastName": "Laine", "teamName": "FIN", "position": "F"},
-            {"firstName": "Miro", "lastName": "Heiskanen", "teamName": "FIN", "position": "D"},
-            {"firstName": "William", "lastName": "Nylander", "teamName": "SWE", "position": "F"},
-            {"firstName": "Elias", "lastName": "Pettersson", "teamName": "SWE", "position": "F"},
-            {"firstName": "Rasmus", "lastName": "Dahlin", "teamName": "SWE", "position": "D"},
-            {"firstName": "Jack", "lastName": "Eichel", "teamName": "USA", "position": "F"},
-            {"firstName": "Auston", "lastName": "Matthews", "teamName": "USA", "position": "F"},
-            {"firstName": "Adam", "lastName": "Fox", "teamName": "USA", "position": "D"},
-            {"firstName": "David", "lastName": "Pastrnak", "teamName": "CZE", "position": "F"},
-            {"firstName": "Roman", "lastName": "Josi", "teamName": "SUI", "position": "D"},
-            {"firstName": "Kevin", "lastName": "Fiala", "teamName": "SUI", "position": "F"},
-        ]
-
-    live_scores = fetch_live_scoring_by_name()
-    
-    final_list = []
-    for player in base_roster:
-        f_name = str(player['firstName'])
-        l_name = str(player['lastName'])
-        country = str(player['teamName'])
-        pos = str(player['position'])
-        
-        full_name = f"{f_name} {l_name}"
-        search_key = f"{clean_name(full_name)}_{clean_name(country)}"
-        
-        stats = live_scores.get(search_key, {'goals': 0, 'assists': 0})
-        
-        final_list.append({
-            "playerId": search_key,
-            "firstName": {"default": f_name},
-            "lastName": {"default": l_name},
-            "teamName": {"default": country},
-            "position": pos,
-            "goals": stats['goals'],
-            "assists": stats['assists'],
-            "points": stats['goals'] + stats['assists']
-        })
-    return final_list
+    # Simplified test data
+    test_players = [
+        {"playerId": "1_CAN", "firstName": {"default": "Connor"}, "lastName": {"default": "McDavid"}, "teamName": {"default": "CAN"}, "position": "F", "goals": 4, "assists": 6, "points": 10},
+        {"playerId": "2_CAN", "firstName": {"default": "Nathan"}, "lastName": {"default": "MacKinnon"}, "teamName": {"default": "CAN"}, "position": "F", "goals": 3, "assists": 7, "points": 10},
+        {"playerId": "3_CAN", "firstName": {"default": "Cale"}, "lastName": {"default": "Makar"}, "teamName": {"default": "CAN"}, "position": "D", "goals": 2, "assists": 5, "points": 7},
+        {"playerId": "4_CAN", "firstName": {"default": "Sidney"}, "lastName": {"default": "Crosby"}, "teamName": {"default": "CAN"}, "position": "F", "goals": 2, "assists": 4, "points": 6},
+        {"playerId": "1_FIN", "firstName": {"default": "Sebastian"}, "lastName": {"default": "Aho"}, "teamName": {"default": "FIN"}, "position": "F", "goals": 3, "assists": 3, "points": 6},
+        {"playerId": "2_FIN", "firstName": {"default": "Patrik"}, "lastName": {"default": "Laine"}, "teamName": {"default": "FIN"}, "position": "F", "goals": 4, "assists": 1, "points": 5},
+        {"playerId": "3_FIN", "firstName": {"default": "Miro"}, "lastName": {"default": "Heiskanen"}, "teamName": {"default": "FIN"}, "position": "D", "goals": 1, "assists": 4, "points": 5},
+        {"playerId": "1_SWE", "firstName": {"default": "William"}, "lastName": {"default": "Nylander"}, "teamName": {"default": "SWE"}, "position": "F", "goals": 4, "assists": 2, "points": 6},
+        {"playerId": "2_SWE", "firstName": {"default": "Elias"}, "lastName": {"default": "Pettersson"}, "teamName": {"default": "SWE"}, "position": "F", "goals": 3, "assists": 3, "points": 6},
+        {"playerId": "3_SWE", "firstName": {"default": "Rasmus"}, "lastName": {"default": "Dahlin"}, "teamName": {"default": "SWE"}, "position": "D", "goals": 1, "assists": 6, "points": 7},
+        {"playerId": "1_USA", "firstName": {"default": "Jack"}, "lastName": {"default": "Eichel"}, "teamName": {"default": "USA"}, "position": "F", "goals": 3, "assists": 4, "points": 7},
+        {"playerId": "2_USA", "firstName": {"default": "Auston"}, "lastName": {"default": "Matthews"}, "teamName": {"default": "USA"}, "position": "F", "goals": 4, "assists": 2, "points": 6},
+        {"playerId": "3_USA", "firstName": {"default": "Adam"}, "lastName": {"default": "Fox"}, "teamName": {"default": "USA"}, "position": "D", "goals": 1, "assists": 5, "points": 6},
+    ]
+    return test_players
 
 def hash_pin(pin):
     return hashlib.sha256(pin.encode()).hexdigest()
@@ -204,7 +140,7 @@ def save_team(team_name, pin, player_ids, manager_country):
         "team_name": team_name,
         "pin_hash": hash_pin(pin),
         "player_ids": player_ids,
-        "manager_country": manager_country,  # NEW FIELD
+        "manager_country": manager_country,
         "created_at": datetime.now(),
         "updated_at": datetime.now()
     })
@@ -226,7 +162,6 @@ def get_country_leaderboard():
     teams = get_all_teams()
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
     
-    # Collect all points by manager's country
     country_points = defaultdict(list)
     
     for team in teams:
@@ -237,22 +172,18 @@ def get_country_leaderboard():
                 total += player_map[pid]['points']
         country_points[manager_country].append(total)
     
-    # Group small countries (<=3 managers) into OTHERS
     final_stats = defaultdict(lambda: {"points": [], "managers": 0, "countries": []})
     
     for country, points_list in country_points.items():
         if len(points_list) <= 3:
-            # Add to OTHERS
             final_stats["OTHERS"]["points"].extend(points_list)
             final_stats["OTHERS"]["managers"] += len(points_list)
             final_stats["OTHERS"]["countries"].append(country)
         else:
-            # Keep separate
             final_stats[country]["points"] = points_list
             final_stats[country]["managers"] = len(points_list)
             final_stats[country]["countries"] = [country]
     
-    # Calculate averages
     results = []
     for group_code, data in final_stats.items():
         if data["managers"] > 0:
@@ -267,278 +198,73 @@ def get_country_leaderboard():
                 "best_score": max(data["points"]) if data["points"] else 0
             })
     
-    # Sort by average points
     results.sort(key=lambda x: x["avg_points"], reverse=True)
     return results
 
-# --- UI ---
+# --- USER INTERFACE ---
 st.title("🏒 Olympics Fantasy Hockey 2026")
 st.caption("Keeping Karlsson Community Fantasy Game")
 
 PLAYERS_DATA = get_all_players_data()
 
-page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
+page = st.sidebar.radio("Menu", ["Home", "Create Team", "Countries"])
 
 if page == "Home":
-    st.write("""
-    ## Welcome to Olympics Fantasy Hockey 2026!
-    
-    ### New: Countries Competition! 🌍
-    Managers compete not only individually but also for their country's honor!
-    Countries with 4+ managers appear separately. Smaller countries are grouped as "Others".
-    
-    ### Scoring
-    | Action | Points |
-    |--------|--------|
-    | Goal | 1 pt |
-    | Assist | 1 pt |
-    """)
+    st.write("Testaa lippuja:")
+    cols = st.columns(5)
+    test_countries = ["FIN", "SWE", "CAN", "USA", "CZE"]
+    for i, code in enumerate(test_countries):
+        with cols[i]:
+            flag = get_flag(code)
+            st.markdown(f"<div style='font-size: 4rem; text-align: center;'>{flag}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: center;'>{code}</div>", unsafe_allow_html=True)
 
 elif page == "Create Team":
-    st.header("📝 Create Your Olympic Roster")
+    st.header("📝 Create Your Team")
     
-    with st.expander("ℹ️ Rules", expanded=True):
-        st.write("""
-        - **7 Forwards + 3 Defensemen**
-        - **Max 1 player per Olympic nation** (CAN, USA, SWE, FIN, CZE, SUI, GER)
-        - Select your **manager nationality** for country competition!
-        """)
-
-    with st.form("team_form"):
-        col1, col2 = st.columns(2)
-        team_name = col1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
-        pin = col2.text_input("PIN Code", type="password", placeholder="4-10 digits")
-        
-        # MANAGER COUNTRY SELECTION
-        st.subheader("🌍 Manager Nationality")
-        
-        col_flag, col_select = st.columns([1, 4])
-        
-        with col_select:
-            manager_country = st.selectbox(
-                "Select your country",
-                options=list(ALL_COUNTRIES.keys()),
-                format_func=lambda x: f"{get_flag(x)} {ALL_COUNTRIES[x]}"
-            )
-        
-        with col_flag:
-            st.markdown(f"<div style='font-size: 3rem; margin-top: 1.8rem;'>{get_flag(manager_country)}</div>", unsafe_allow_html=True)
-        
-        st.divider()
-        st.subheader("Select Players by Country")
-        
-        # Data prep
-        players_by_country = {}
-        for p in PLAYERS_DATA:
-            country = p['teamName']['default']
-            if country not in players_by_country:
-                players_by_country[country] = {'F': [], 'D': []}
-            
-            pos = p['position']
-            if pos in ['C', 'L', 'R', 'F']:
-                players_by_country[country]['F'].append(p)
-            elif pos == 'D':
-                players_by_country[country]['D'].append(p)
-
-        sorted_countries = sorted(players_by_country.keys())
-        selected_player_ids = []
-        
-        # Render with flags
-        for country in sorted_countries:
-            flag = get_flag(country)
-            is_olympic = country in OLYMPIC_TEAMS
-            olympic_badge = "🏒" if is_olympic else ""
-            
-            with st.expander(f"{flag} {country} {olympic_badge}"):
-                col_f, col_d = st.columns(2)
-                
-                with col_f:
-                    st.markdown("**Forwards**")
-                    for p in players_by_country[country]['F']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
-                            
-                with col_d:
-                    st.markdown("**Defensemen**")
-                    for p in players_by_country[country]['D']:
-                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
-                            selected_player_ids.append(p['playerId'])
-
-        # Validation
-        stats_counts = {'F': 0, 'D': 0}
-        country_counts = {}
-        player_map = {p['playerId']: p for p in PLAYERS_DATA}
-        
-        for pid in selected_player_ids:
-            p = player_map[pid]
-            pos = 'D' if p['position'] == 'D' else 'F'
-            stats_counts[pos] += 1
-            ctry = p['teamName']['default']
-            country_counts[ctry] = country_counts.get(ctry, 0) + 1
-
-        # Status display
-        st.divider()
-        st.subheader("Draft Status")
-        
-        s1, s2, s3 = st.columns(3)
-        f_color = "green" if stats_counts['F'] == 7 else "red"
-        s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
-        
-        d_color = "green" if stats_counts['D'] == 3 else "red"
-        s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
-        
-        violation_countries = [c for c, count in country_counts.items() if count > 1]
-        if not violation_countries:
-            s3.markdown("1-Player/Nation: :green[**OK**]")
-        else:
-            s3.markdown(f"1-Player/Nation: :red[**VIOLATION**]")
-
-        submit = st.form_submit_button("💾 Save Team", type="primary")
-        
-        if submit:
-            errors = []
-            
-            if not team_name:
-                errors.append("Missing Team Name.")
-            if not pin or len(pin) < 4:
-                errors.append("Invalid PIN.")
-            if stats_counts['F'] != 7:
-                errors.append(f"Need 7 Forwards (Selected: {stats_counts['F']}).")
-            if stats_counts['D'] != 3:
-                errors.append(f"Need 3 Defensemen (Selected: {stats_counts['D']}).")
-            if violation_countries:
-                errors.append(f"Multiple players from: {', '.join(violation_countries)}")
-            
-            if errors:
-                for e in errors:
-                    st.error(e)
-            else:
-                success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
-                if success:
-                    st.balloons()
-                    st.success(f"Team '{team_name}' saved! Representing {get_flag(manager_country)} {ALL_COUNTRIES[manager_country]}!")
-                else:
-                    st.error(msg)
-
-elif page == "My Team":
-    st.header("👤 View Your Team")
+    # MANAGER COUNTRY - YKSINKERTAISTETTU VERSIO
+    st.subheader("🌍 Manager Nationality")
     
-    with st.form("login_form"):
-        col1, col2 = st.columns(2)
-        login_name = col1.text_input("Team Name")
-        login_pin = col2.text_input("PIN", type="password")
-        submit = st.form_submit_button("🔓 Log In")
+    # Käytä selectboxia ilman lippuja labelissa, näytä lippu erikseen
+    manager_country = st.selectbox(
+        "Select your country",
+        options=list(ALL_COUNTRIES.keys()),
+        format_func=lambda x: f"{ALL_COUNTRIES[x]}"
+    )
     
-    if submit:
-        target_team = None
-        for t in get_all_teams():
-            if t['team_name'] == login_name:
-                target_team = t
-                break
+    # Näytä valittu lippu isona
+    selected_flag = get_flag(manager_country)
+    st.markdown(f"<div style='font-size: 5rem; margin: -20px 0 20px 0;'>{selected_flag}</div>", unsafe_allow_html=True)
+    
+    # Testaa pelaajien liput
+    st.subheader("Available Players")
+    
+    players_by_country = {}
+    for p in PLAYERS_DATA:
+        country = p['teamName']['default']
+        if country not in players_by_country:
+            players_by_country[country] = {'F': [], 'D': []}
         
-        if target_team and hash_pin(login_pin) == target_team['pin_hash']:
-            manager_country = target_team.get("manager_country", "UNK")
-            flag = get_flag(manager_country)
-            
-            st.success(f"Team: {target_team['team_name']} | Manager: {flag} {ALL_COUNTRIES.get(manager_country, manager_country)}")
-            
-            player_map = {p['playerId']: p for p in PLAYERS_DATA}
-            
-            team_roster = []
-            total_pts = 0
-            
-            for pid in target_team.get('player_ids', []):
-                if pid in player_map:
-                    p = player_map[pid]
-                    flag = get_flag(p['teamName']['default'])
-                    team_roster.append({
-                        "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
-                        "Country": f"{flag} {p['teamName']['default']}",
-                        "G": p['goals'],
-                        "A": p['assists'],
-                        "FP": p['points']
-                    })
-                    total_pts += p['points']
-            
-            st.dataframe(pd.DataFrame(team_roster), use_container_width=True)
-            st.metric("Total Points", total_pts)
-            
-        else:
-            st.error("Invalid Team Name or PIN")
-
-elif page == "Leaderboard":
-    st.header("🏆 Individual Leaderboard")
+        pos = p['position']
+        if pos in ['C', 'L', 'R', 'F']:
+            players_by_country[country]['F'].append(p)
+        elif pos == 'D':
+            players_by_country[country]['D'].append(p)
     
-    all_teams = get_all_teams()
-    player_map = {p['playerId']: p for p in PLAYERS_DATA}
-    
-    rankings = []
-    
-    for team in all_teams:
-        t_points = 0
-        for pid in team.get('player_ids', []):
-            if pid in player_map:
-                t_points += player_map[pid]['points']
+    for country in sorted(players_by_country.keys()):
+        flag = get_flag(country)
         
-        manager_country = team.get("manager_country", "UNK")
-        
-        rankings.append({
-            "Team": team['team_name'],
-            "Manager Country": f"{get_flag(manager_country)} {ALL_COUNTRIES.get(manager_country, manager_country)}",
-            "Points": t_points
-        })
-    
-    df = pd.DataFrame(rankings).sort_values("Points", ascending=False).reset_index(drop=True)
-    df.index += 1
-    st.dataframe(df, use_container_width=True)
+        # Käytä HTML:n emoji-merkkejä suoraan
+        with st.expander(f"{flag} {country}"):
+            for p in players_by_country[country]['F']:
+                st.write(f"- {p['firstName']['default']} {p['lastName']['default']}")
 
 elif page == "Countries":
     st.header("🌍 Countries Competition")
-    st.write("Managers compete for national pride! Countries with 4+ managers shown separately. Smaller countries grouped as 'Others'.")
     
-    country_stats = get_country_leaderboard()
-    
-    if not country_stats:
-        st.info("No teams registered yet!")
-    else:
-        # Display table
-        display_data = []
-        for i, stats in enumerate(country_stats, 1):
-            countries_text = ", ".join([f"{get_flag(c)} {ALL_COUNTRIES.get(c, c)}" for c in stats['countries']]) if stats['code'] == "OTHERS" else f"{get_flag(stats['code'])} {stats['name']}"
-            
-            display_data.append({
-                "Rank": i,
-                "Country/Group": countries_text,
-                "Managers": stats['managers'],
-                "Avg Points": stats['avg_points'],
-                "Best Score": stats['best_score']
-            })
-        
-        df = pd.DataFrame(display_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        # Podium for top 3
-        if len(country_stats) >= 3:
-            st.divider()
-            cols = st.columns(3)
-            medals = ["🥇", "🥈", "🥉"]
-            colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
-            
-            for i in range(3):
-                stats = country_stats[i]
-                with cols[i]:
-                    flag = get_flag(stats['code'])
-                    name = "Others" if stats['code'] == "OTHERS" else stats['name']
-                    
-                    st.markdown(f"""
-                    <div style='text-align: center; padding: 20px; background-color: {colors[i]}; border-radius: 10px;'>
-                        <div style='font-size: 4rem;'>{medals[i]}</div>
-                        <div style='font-size: 2rem;'>{flag}</div>
-                        <div style='font-size: 1.3rem; font-weight: bold;'>{name}</div>
-                        <div style='font-size: 1.1rem;'>{stats['avg_points']} avg pts</div>
-                        <div style='font-size: 0.9rem;'>({stats['managers']} managers)</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+    # Testaa lippuja
+    st.write("Flag test:")
+    for code in ["FIN", "SWE", "CAN", "USA", "CZE", "SUI", "GER"]:
+        flag = get_flag(code)
+        st.write(f"{flag} {code} = {ALL_COUNTRIES[code]}")
 
