@@ -27,7 +27,7 @@ def get_deadline_message():
         return "🔒 Olympics have started - team changes are now locked"
 
 # --- SETTINGS ---
-st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
+st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
 
 # --- COUNTRY FLAGS & LIST ---
 COUNTRY_FLAGS = {
@@ -344,12 +344,89 @@ def clear_all_cache():
         return False
 
 # --- UI ---
-st.title("🏒 Olympics Fantasy Hockey 2026")
+st.title("🏒 Olympics Fantasy Hockey 2025")
 
 PLAYERS_DATA = get_all_players_data()
 
 # --- SIDEBAR ---
 with st.sidebar:
+    st.divider()
+    st.subheader("🎨 Theme")
+    
+    # Theme selector
+    if 'theme' not in st.session_state:
+        st.session_state['theme'] = 'Light'
+    
+    theme_options = {
+        'Light': {'primary': '#FF4B4B', 'bg': '#FFFFFF', 'secondary_bg': '#F0F2F6', 'text': '#262730'},
+        'Dark': {'primary': '#FF4B4B', 'bg': '#0E1117', 'secondary_bg': '#262730', 'text': '#FAFAFA'},
+        'Ice': {'primary': '#00D4FF', 'bg': '#E8F4F8', 'secondary_bg': '#D0E8F0', 'text': '#1A3A52'},
+        'Fire': {'primary': '#FF6B35', 'bg': '#1A1A2E', 'secondary_bg': '#16213E', 'text': '#E8E8E8'}
+    }
+    
+    selected_theme = st.selectbox(
+        "Select Theme",
+        options=list(theme_options.keys()),
+        index=list(theme_options.keys()).index(st.session_state.get('theme', 'Light')),
+        key='theme_selector'
+    )
+    
+    st.session_state['theme'] = selected_theme
+    theme = theme_options[selected_theme]
+    
+    # Theme preview
+    st.caption(f"🎨 {selected_theme} Theme Active")
+    
+    # Apply custom CSS based on theme
+    st.markdown(f"""
+    <style>
+        /* Main theme colors */
+        .stApp {{
+            background-color: {theme['bg']};
+        }}
+        
+        /* Metric styling */
+        [data-testid="stMetricValue"] {{
+            color: {theme['primary']};
+            font-size: 2rem;
+            font-weight: bold;
+        }}
+        
+        /* Card-like containers */
+        .stMarkdown {{
+            color: {theme['text']};
+        }}
+        
+        /* Buttons */
+        .stButton>button {{
+            border-radius: 8px;
+            font-weight: 600;
+        }}
+        
+        /* Dataframe headers */
+        .stDataFrame {{
+            border-radius: 10px;
+        }}
+        
+        /* Expander styling */
+        .streamlit-expanderHeader {{
+            background-color: {theme['secondary_bg']};
+            border-radius: 8px;
+            font-weight: 600;
+        }}
+        
+        /* Sidebar */
+        [data-testid="stSidebar"] {{
+            background-color: {theme['secondary_bg']};
+        }}
+        
+        /* Headers with glow effect for special themes */
+        h1, h2, h3 {{
+            color: {theme['text']};
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.divider()
     st.subheader("⚙️ Debug & Settings")
     
@@ -396,51 +473,246 @@ with st.sidebar:
             st.info("No debug data available. Refresh to load.")
 
 # --- PAGE NAVIGATION (LISÄÄ ADMIN TÄHÄN) ---
-page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries", "Admin"])
+page = st.sidebar.radio("Menu", ["🏠 Home", "✏️ Create Team", "👤 My Team", "🏆 Leaderboard", "🌍 Countries", "⚙️ Admin"])
 
 # --- SESSION STATE FOR DELETE CONFIRMATION ---
 if 'confirm_delete' not in st.session_state:
     st.session_state['confirm_delete'] = False
 
-if page == "Home":
-    st.write("""
-    ## Welcome to Olympics Fantasy Hockey 2026!
+if page == "🏠 Home":
+    st.markdown("# 🏒 Olympics Fantasy Hockey 2026")
+    st.markdown("### *Build your dream team from 12 Olympic nations!*")
     
-    ### Rules 🏒
-    - **12 players**: One from each Olympic nation (CAN, USA, SWE, FIN, CZE, SUI, GER, DEN, FRA, ITA, LAT, SVK)
-    - **4 defensemen + 8 forwards**
-    - **Countries Competition**: Managers compete for national pride!
+    # Deadline countdown
+    if is_before_deadline():
+        days_left = (OLYMPICS_START - datetime.now()).days
+        hours_left = ((OLYMPICS_START - datetime.now()).seconds // 3600)
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📅 Days Until Olympics", days_left)
+        with col2:
+            st.metric("⏰ Hours Remaining", hours_left)
+        with col3:
+            st.metric("🗓️ Tournament Starts", "Feb 11, 2026")
+    else:
+        st.success("🏒 **Olympics are LIVE!** Tournament in progress!")
     
-    ### Scoring
-    | Action | Points |
-    |--------|--------|
-    | Goal | 1 pt |
-    | Assist | 1 pt |
-    """)
+    st.markdown("---")
+    
+    # Live statistics
+    teams = get_all_teams()
+    total_teams = len(teams)
+    
+    if total_teams > 0:
+        st.markdown("### 📊 Live Tournament Stats")
+        
+        # Calculate stats
+        player_map = {p['playerId']: p for p in PLAYERS_DATA}
+        total_points = 0
+        country_participation = defaultdict(int)
+        
+        for team in teams:
+            country_participation[team.get('manager_country', 'UNK')] += 1
+            for pid in team.get('player_ids', []):
+                if pid in player_map:
+                    total_points += player_map[pid]['points']
+        
+        # Top stats
+        if teams:
+            team_points = []
+            for team in teams:
+                pts = sum(player_map.get(pid, {}).get('points', 0) for pid in team.get('player_ids', []))
+                team_points.append((team['team_name'], pts, team.get('manager_country', 'UNK')))
+            team_points.sort(key=lambda x: x[1], reverse=True)
+            
+            top_team = team_points[0] if team_points else None
+            avg_points = total_points / total_teams if total_teams > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("👥 Total Teams", total_teams)
+        
+        with col2:
+            st.metric("🌍 Countries Represented", len(country_participation))
+        
+        with col3:
+            st.metric("📈 Average Points", f"{avg_points:.1f}")
+        
+        with col4:
+            if top_team:
+                st.metric("🏆 Current Leader", top_team[0][:10] + "..." if len(top_team[0]) > 10 else top_team[0])
+        
+        # Top 3 preview
+        if len(team_points) >= 3:
+            st.markdown("---")
+            st.markdown("### 🏆 Top 3 Teams")
+            
+            medals = ["🥇", "🥈", "🥉"]
+            for i, (name, pts, country) in enumerate(team_points[:3]):
+                flag = get_flag(country)
+                st.markdown(f"{medals[i]} **{name}** {flag} - {pts} points")
+    
+    st.markdown("---")
+    
+    # Rules section
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.markdown("### 🏒 Rules")
+        st.markdown("""
+        - **12 players**: One from each Olympic nation
+        - **8 forwards + 4 defensemen**
+        - **One player per country** - no duplicates!
+        - **Countries Competition**: Represent your nation!
+        """)
+    
+    with col_right:
+        st.markdown("### 📊 Scoring")
+        st.markdown("""
+        | Action | Points |
+        |--------|--------|
+        | ⚽ Goal | **1 point** |
+        | 🎯 Assist | **1 point** |
+        
+        *Simple and exciting!*
+        """)
+    
+    st.markdown("---")
+    
+    # Olympic nations with flags
+    st.markdown("### 🌍 Participating Nations")
+    st.markdown("Select one player from each of these 12 countries:")
+    
+    flags_text = " ".join([f"{get_flag(c)}" for c in OLYMPIC_TEAMS])
+    st.markdown(f"<div style='font-size: 2.5rem; text-align: center;'>{flags_text}</div>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Call to action
+    if is_before_deadline():
+        st.markdown("### 🚀 Ready to Play?")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info("**New Player?** Click '✏️ Create Team' in the sidebar to build your roster!")
+        with col2:
+            st.info("**Returning?** Go to '👤 My Team' to manage your lineup!")
+    else:
+        st.warning("⚠️ Team creation is now closed. The Olympics have started!")
+        st.info("View the '🏆 Leaderboard' to see live standings!")
     
 # --- COUNTRIES SIVU ---
-elif page == "Countries":
+elif page == "🌍 Countries":
     st.header("🌍 Countries Competition")
-    st.write("Managers compete for national pride! Countries with **3+ managers** appear separately. Smaller countries grouped as 'Others'.")
+    st.markdown("*Managers compete for national pride! Battle for your country!*")
     
     country_stats = get_country_leaderboard()
     
     if not country_stats:
-        st.info("No teams registered yet!")
+        st.info("🏁 No teams registered yet! Be the first to represent your country!")
     else:
+        # Top 3 Podium (large visual)
+        if len(country_stats) >= 3:
+            st.markdown("### 🏅 Medal Podium")
+            
+            medals = ["🥇", "🥈", "🥉"]
+            colors = ["linear-gradient(135deg, #FFD700 0%, #FFA500 100%)", 
+                     "linear-gradient(135deg, #C0C0C0 0%, #808080 100%)", 
+                     "linear-gradient(135deg, #CD7F32 0%, #8B4513 100%)"]
+            heights = ["200px", "160px", "140px"]
+            
+            # Create podium with 2nd, 1st, 3rd order
+            cols = st.columns([1, 1.2, 1])
+            podium_order = [1, 0, 2]  # 2nd, 1st, 3rd
+            
+            for col_idx, stats_idx in enumerate(podium_order):
+                if stats_idx < len(country_stats):
+                    stats = country_stats[stats_idx]
+                    with cols[col_idx]:
+                        flag = get_flag(stats['code'])
+                        name = "Others" if stats['code'] == "OTHERS" else stats['name']
+                        
+                        # Adjust size for winner
+                        if stats_idx == 0:
+                            medal_size = "5rem"
+                            flag_size = "3rem"
+                            name_size = "1.5rem"
+                        else:
+                            medal_size = "4rem"
+                            flag_size = "2.5rem"
+                            name_size = "1.2rem"
+                        
+                        st.markdown(f"""
+                        <div style='text-align: center; padding: 25px; 
+                                    background: {colors[stats_idx]}; 
+                                    border-radius: 15px; 
+                                    height: {heights[stats_idx]};
+                                    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+                                    display: flex;
+                                    flex-direction: column;
+                                    justify-content: center;'>
+                            <div style='font-size: {medal_size};'>{medals[stats_idx]}</div>
+                            <div style='font-size: {flag_size};'>{flag}</div>
+                            <div style='font-size: {name_size}; font-weight: bold; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);'>{name}</div>
+                            <div style='font-size: 1.2rem; color: white; font-weight: bold;'>{stats['avg_points']:.1f} pts</div>
+                            <div style='font-size: 0.9rem; color: rgba(255,255,255,0.9);'>({stats['managers']} managers)</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+        
+        # Statistics overview
+        st.markdown("### 📊 Competition Statistics")
+        
+        total_managers = sum(s['managers'] for s in country_stats)
+        countries_competing = len([s for s in country_stats if s['code'] != 'OTHERS'])
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("👥 Total Managers", total_managers)
+        with col2:
+            st.metric("🌍 Countries Competing", countries_competing)
+        with col3:
+            if country_stats:
+                top_country = country_stats[0]
+                st.metric("🏆 Leading Country", 
+                         top_country['name'] if top_country['code'] != 'OTHERS' else 'Others')
+        
+        st.markdown("---")
+        
+        # Full leaderboard
+        st.markdown("### 📋 Full Standings")
+        st.caption("*Countries with 3+ managers shown separately. Smaller countries grouped as 'Others'.*")
+        
         display_data = []
         for i, stats in enumerate(country_stats, 1):
+            # Rank indicator with emoji
+            rank_emoji = "👑" if i == 1 else "🔥" if i <= 3 else "📍"
+            
             if stats['code'] == "OTHERS":
-                countries_text = ", ".join([get_country_display(c) for c in stats['countries']])
+                flag = "🌐"
+                name = "Others (Mixed)"
+                countries_text = ", ".join([get_country_display(c) for c in stats.get('countries', [])])
+                hover_text = f"{countries_text}"
             else:
-                countries_text = get_country_display(stats['code'])
+                flag = get_flag(stats['code'])
+                name = stats['name']
+                hover_text = name
+            
+            # Calculate trend (mock for now - could be real if we store history)
+            trend = "📈" if i <= len(country_stats) // 2 else "📉"
             
             display_data.append({
-                "Rank": i,
-                "Country": countries_text,
+                "Rank": f"{rank_emoji} #{i}",
+                "Flag": flag,
+                "Country": name,
                 "Managers": stats['managers'],
-                "Avg Points": stats['avg_points'],
-                "Best": stats['best_score']
+                "Avg Points": f"{stats['avg_points']:.1f}",
+                "Best Score": stats['best_score'],
+                "Total Points": stats['managers'] * stats['avg_points'],
+                "Trend": trend
             })
         
         df = pd.DataFrame(display_data)
@@ -449,38 +721,35 @@ elif page == "Countries":
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Rank": st.column_config.NumberColumn("Rank", width="small"),
-                "Country": st.column_config.TextColumn("Country/Group", width="large"),
-                "Managers": st.column_config.NumberColumn("Managers", width="small"),
-                "Avg Points": st.column_config.NumberColumn("Avg Points", width="small"),
-                "Best": st.column_config.NumberColumn("Best Score", width="small")
+                "Rank": st.column_config.TextColumn("Rank", width="small"),
+                "Flag": st.column_config.TextColumn("", width="small"),
+                "Country": st.column_config.TextColumn("Country", width="medium"),
+                "Managers": st.column_config.NumberColumn("👥 Managers", width="small"),
+                "Avg Points": st.column_config.TextColumn("📊 Avg", width="small"),
+                "Best Score": st.column_config.NumberColumn("🏆 Best", width="small"),
+                "Total Points": st.column_config.NumberColumn("💯 Total", width="small"),
+                "Trend": st.column_config.TextColumn("📈", width="small")
             }
         )
         
-        if len(country_stats) >= 3:
-            st.divider()
-            cols = st.columns(3)
-            medals = ["🥇", "🥈", "🥉"]
-            colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
-            
-            for i in range(min(3, len(country_stats))):
-                stats = country_stats[i]
-                with cols[i]:
-                    flag = get_flag(stats['code'])
-                    name = "Others" if stats['code'] == "OTHERS" else stats['name']
-                    
-                    st.markdown(f"""
-                    <div style='text-align: center; padding: 20px; background-color: {colors[i]}; border-radius: 10px;'>
-                        <div style='font-size: 4rem;'>{medals[i]}</div>
-                        <div style='font-size: 2rem;'>{flag}</div>
-                        <div style='font-size: 1.3rem; font-weight: bold;'>{name}</div>
-                        <div style='font-size: 1.1rem;'>{stats['avg_points']} avg pts</div>
-                        <div style='font-size: 0.9rem;'>({stats['managers']} managers)</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+        # Additional insights
+        st.markdown("---")
+        st.markdown("### 💡 Competition Insights")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Most competitive country
+            most_competitive = max(country_stats, key=lambda x: x['managers'])
+            st.info(f"**🔥 Most Competitive:** {get_flag(most_competitive['code'])} {most_competitive['name']} with **{most_competitive['managers']} managers**")
+        
+        with col2:
+            # Best performing
+            best_performing = max(country_stats, key=lambda x: x['avg_points'])
+            st.success(f"**⭐ Best Average:** {get_flag(best_performing['code'])} {best_performing['name']} with **{best_performing['avg_points']:.1f} pts/manager**")
 
 # --- MY TEAM SIVU ---
-elif page == "My Team":
+elif page == "👤 My Team":
     st.header("👤 View Your Team")
     
     if 'logged_in_team' not in st.session_state:
@@ -777,7 +1046,7 @@ elif page == "My Team":
                 st.rerun()
 
 # --- CREATE TEAM SIVU (UUDET SÄÄNNÖT) ---
-elif page == "Create Team":
+elif page == "✏️ Create Team":
     st.header("📝 Create Your Olympic Roster")
     
     # Check deadline
@@ -1000,7 +1269,7 @@ elif page == "Create Team":
                 st.error(msg)
     
     # --- LEADERBOARD SIVU ---
-elif page == "Leaderboard":
+elif page == "🏆 Leaderboard":
     st.header("🏆 Individual Leaderboard")
 
     col1, col2 = st.columns([3, 1])
@@ -1106,11 +1375,11 @@ elif page == "Leaderboard":
         st.info("No teams registered yet!")
 
 # --- COUNTRIES SIVU (MINIMI 3 MANAGERS) ---
-elif page == "Admin":
+elif page == "⚙️ Admin":
     st.header("🔧 Admin Panel")
     
     admin_pass = st.text_input("Admin Password", type="password", key="admin_password")
-    correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2026")
+    correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2025")
     
     if admin_pass == correct_password:
         st.success("✅ Admin access granted")
