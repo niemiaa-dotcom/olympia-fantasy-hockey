@@ -76,28 +76,22 @@ def get_db():
 
 # --- DATA FUNCTIONS ---
 def clean_name(name):
-    """
-    Normalisoi nimen: poistaa erikoismerkit, muuttaa pieniksi kirjaimiksi,
-    poistaa välilyönnit ja alaviivat
-    """
+    """Normalisoi nimen: poistaa erikoismerkit, välilyönnit, alaviivat"""
     if not name: 
         return ""
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
-    return n.lower().strip().replace(" ", "").replace("_", "")
+    return n.lower().strip().replace(" ", "").replace("_", "").replace(".", "")
 
-def create_lookup_key(first_name, last_name):
+def create_short_key(first_name, last_name):
     """
-    Luo avain joka täsmää API:n formaattiin.
-    API käyttää: eka_kirjain.sukunimi_maa (esim. t.konecny_can)
+    Luo lyhennetty avain API:n mukaan: eka kirjain + piste + sukunimi
+    Esimerkki: "Tomas", "Hertl" → "t.hertl"
     """
     if not first_name or not last_name:
         return ""
-    
-    # Ota etunimestä vain ensimmäinen kirjain + piste
     first_initial = first_name[0].lower()
-    last = clean_name(last_name)
-    
-    return f"{first_initial}.{last}"
+    last_clean = clean_name(last_name)
+    return f"{first_initial}.{last_clean}"
 
 @st.cache_data(ttl=60)
 def fetch_live_scoring_by_name():
@@ -142,16 +136,17 @@ def fetch_live_scoring_by_name():
                                 players = team_stats.get(group, [])
                                 
                                 for p in players:
-                                    # Käytä lyhennettyä nimeä API:sta
+                                    # Käytä lyhennettyä nimeä API:sta (esim. "T. Konecny")
                                     name_default = p.get('name', {}).get('default', '')
                                     
                                     if name_default:
                                         # Muunna "T. Konecny" → "t.konecny"
                                         key = f"{clean_name(name_default)}_{clean_name(country_code)}"
                                     else:
+                                        # Fallback
                                         fn = p.get('firstName', {}).get('default', '')
                                         ln = p.get('lastName', {}).get('default', '')
-                                        key = create_lookup_key(fn, ln) + f"_{clean_name(country_code)}"
+                                        key = create_short_key(fn, ln) + f"_{clean_name(country_code)}"
                                     
                                     goals = int(p.get('goals', 0))
                                     assists = int(p.get('assists', 0))
@@ -181,8 +176,6 @@ def get_all_players_data():
         csv_loaded = False
 
     live_scores = fetch_live_scoring_by_name()
-    
-    # DEBUG: Näytä API-avaimet
     api_keys = list(live_scores.keys())
     
     matched_players = 0
@@ -197,28 +190,20 @@ def get_all_players_data():
         country = str(player['teamName'])
         pos = str(player['position'])
         
-        # Luo kaksi eri avainta ja testaa kumpi täsmää
-        full_name_key = f"{clean_name(f_name + ' ' + l_name)}_{clean_name(country)}"
-        short_key = create_lookup_key(f_name, l_name) + f"_{clean_name(country)}"
+        # Yritä täsmätä lyhennetyllä avaimella (API:n muoto)
+        short_key = create_short_key(f_name, l_name) + f"_{clean_name(country)}"
         
-        # Kokeile ensin täyttä nimeä, sitten lyhennettyä
-        stats = live_scores.get(full_name_key)
-        used_key = full_name_key
+        # Hae stats lyhennetyllä avaimella
+        stats = live_scores.get(short_key, {'goals': 0, 'assists': 0})
         
-        if not stats:
-            stats = live_scores.get(short_key)
-            used_key = short_key
-        
-        if not stats:
-            stats = {'goals': 0, 'assists': 0}
-        
-        # Debug: Vertaa ensimmäisiä 10
+        # Debug: Vertaa
         if len(debug_comparison) < 10:
+            full_key = f"{clean_name(f_name + ' ' + l_name)}_{clean_name(country)}"
             debug_comparison.append({
                 'name': f"{f_name} {l_name}",
                 'country': country,
-                'full_key': full_name_key,
                 'short_key': short_key,
+                'full_key': full_key,
                 'found': stats['goals'] > 0 or stats['assists'] > 0,
                 'stats': stats
             })
@@ -229,8 +214,9 @@ def get_all_players_data():
             if len(sample_matches) < 5:
                 sample_matches.append(f"{f_name} {l_name} ({country}): {stats['goals']}G {stats['assists']}A")
         
+        # Käytä lyhennettyä avainta ID:nä jotta täsmää API:n kanssa
         final_list.append({
-            "playerId": full_name_key,  # Käytä täyttä nimeä ID:nä
+            "playerId": short_key,
             "firstName": {"default": f_name},
             "lastName": {"default": l_name},
             "teamName": {"default": country},
@@ -240,7 +226,6 @@ def get_all_players_data():
             "points": stats['goals'] + stats['assists']
         })
     
-    # Tallenna debug
     st.session_state['player_data_debug'] = {
         "csv_loaded": csv_loaded,
         "csv_players": len(base_roster),
