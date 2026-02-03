@@ -40,7 +40,14 @@ OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT",
                  "SVK", "SWE", "SUI", "USA"]
 
 def get_flag(code):
+    """Return emoji flag for country code"""
     return COUNTRY_FLAGS.get(code, "🏒")
+
+def get_country_display(code):
+    """Return formatted country with flag and name"""
+    flag = get_flag(code)
+    name = ALL_COUNTRIES.get(code, code)
+    return f"{flag} {name}"
 
 # --- FIREBASE ---
 def init_firebase():
@@ -418,7 +425,7 @@ elif page == "Create Team":
                 success, msg = save_team(team_name, pin, selected_player_ids, manager_country)
                 if success:
                     st.balloons()
-                    st.success(f"Team '{team_name}' saved! Representing {get_flag(manager_country)} {ALL_COUNTRIES[manager_country]}!")
+                    st.success(f"Team '{team_name}' saved! Representing {get_country_display(manager_country)}!")
                 else:
                     st.error(msg)
 
@@ -440,9 +447,8 @@ elif page == "My Team":
         
         if target_team and hash_pin(login_pin) == target_team['pin_hash']:
             manager_country = target_team.get("manager_country", "UNK")
-            flag = get_flag(manager_country)
             
-            st.success(f"Team: {target_team['team_name']} | Manager: {flag} {ALL_COUNTRIES.get(manager_country, manager_country)}")
+            st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
             
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
@@ -452,17 +458,27 @@ elif page == "My Team":
             for pid in target_team.get('player_ids', []):
                 if pid in player_map:
                     p = player_map[pid]
-                    flag = get_flag(p['teamName']['default'])
+                    country_code = p['teamName']['default']
                     team_roster.append({
                         "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
-                        "Country": f"{flag} {p['teamName']['default']}",
+                        "Country": get_country_display(country_code),
                         "G": p['goals'],
                         "A": p['assists'],
                         "FP": p['points']
                     })
                     total_pts += p['points']
             
-            st.dataframe(pd.DataFrame(team_roster), use_container_width=True)
+            st.dataframe(
+                pd.DataFrame(team_roster),
+                use_container_width=True,
+                column_config={
+                    "Player": st.column_config.TextColumn("Player", width="medium"),
+                    "Country": st.column_config.TextColumn("Country", width="medium"),
+                    "G": st.column_config.NumberColumn("G", width="small"),
+                    "A": st.column_config.NumberColumn("A", width="small"),
+                    "FP": st.column_config.NumberColumn("FP", width="small")
+                }
+            )
             st.metric("Total Points", total_pts)
             
         else:
@@ -489,17 +505,27 @@ elif page == "Leaderboard":
         
         rankings.append({
             "Team": team_name,
-            "Manager Country": f"{get_flag(manager_country)} {ALL_COUNTRIES.get(manager_country, manager_country)}",
+            "Manager": get_country_display(manager_country),
             "Points": t_points
         })
         
         # Store team data for later lookup
         teams_dict[team_name] = team
     
-    # Display leaderboard
+    # Display leaderboard with column configuration to ensure emojis render
     df = pd.DataFrame(rankings).sort_values("Points", ascending=False).reset_index(drop=True)
     df.index += 1
-    st.dataframe(df, use_container_width=True)
+    
+    # Use st.dataframe with column configuration
+    st.dataframe(
+        df,
+        use_container_width=True,
+        column_config={
+            "Team": st.column_config.TextColumn("Team", width="medium"),
+            "Manager": st.column_config.TextColumn("Manager Country", width="medium"),
+            "Points": st.column_config.NumberColumn("Points", width="small")
+        }
+    )
     
     # Team roster viewer
     st.divider()
@@ -520,7 +546,7 @@ elif page == "Leaderboard":
             manager_country = team_data.get("manager_country", "UNK")
             
             st.markdown(f"### {selected_team}")
-            st.markdown(f"**Manager:** {get_flag(manager_country)} {ALL_COUNTRIES.get(manager_country, manager_country)}")
+            st.markdown(f"**Manager:** {get_country_display(manager_country)}")
             
             # Build roster table
             team_roster = []
@@ -529,20 +555,32 @@ elif page == "Leaderboard":
             for pid in team_data.get('player_ids', []):
                 if pid in player_map:
                     p = player_map[pid]
-                    flag = get_flag(p['teamName']['default'])
+                    country_code = p['teamName']['default']
                     team_roster.append({
                         "Player": f"{p['firstName']['default']} {p['lastName']['default']}",
                         "Pos": p['position'],
-                        "Country": f"{flag} {p['teamName']['default']}",
+                        "Country": get_country_display(country_code),
                         "G": p['goals'],
                         "A": p['assists'],
                         "FP": p['points']
                     })
                     total_pts += p['points']
             
-            # Display roster
+            # Display roster with column configuration
             roster_df = pd.DataFrame(team_roster)
-            st.dataframe(roster_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                roster_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Player": st.column_config.TextColumn("Player", width="medium"),
+                    "Pos": st.column_config.TextColumn("Pos", width="small"),
+                    "Country": st.column_config.TextColumn("Country", width="medium"),
+                    "G": st.column_config.NumberColumn("G", width="small"),
+                    "A": st.column_config.NumberColumn("A", width="small"),
+                    "FP": st.column_config.NumberColumn("FP", width="small")
+                }
+            )
             
             # Show total points
             col1, col2, col3 = st.columns(3)
@@ -564,18 +602,32 @@ elif page == "Countries":
         # Display table
         display_data = []
         for i, stats in enumerate(country_stats, 1):
-            countries_text = ", ".join([f"{get_flag(c)} {ALL_COUNTRIES.get(c, c)}" for c in stats['countries']]) if stats['code'] == "OTHERS" else f"{get_flag(stats['code'])} {stats['name']}"
+            if stats['code'] == "OTHERS":
+                countries_text = ", ".join([get_country_display(c) for c in stats['countries']])
+            else:
+                countries_text = get_country_display(stats['code'])
             
             display_data.append({
                 "Rank": i,
-                "Country/Group": countries_text,
+                "Country": countries_text,
                 "Managers": stats['managers'],
                 "Avg Points": stats['avg_points'],
-                "Best Score": stats['best_score']
+                "Best": stats['best_score']
             })
         
         df = pd.DataFrame(display_data)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                "Country": st.column_config.TextColumn("Country/Group", width="large"),
+                "Managers": st.column_config.NumberColumn("Managers", width="small"),
+                "Avg Points": st.column_config.NumberColumn("Avg Points", width="small"),
+                "Best": st.column_config.NumberColumn("Best Score", width="small")
+            }
+        )
         
         # Podium for top 3
         if len(country_stats) >= 3:
