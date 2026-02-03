@@ -8,6 +8,8 @@ import requests
 import pandas as pd
 import unicodedata
 from collections import defaultdict
+import logging
+logging.basicConfig(level=logging.INFO)
 
 # --- SETTINGS ---
 st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
@@ -83,34 +85,90 @@ def clean_name(name):
 
 @st.cache_data(ttl=300)
 def fetch_live_scoring_by_name():
+    # 4 Nations -turnauksen päivämäärät (helmikuu 2025)
     start_date = "2025-02-12"
-    end_date = "2025-02-22"
+    end_date = "2025-02-20"
     live_stats = {}
     
-    if datetime.now() < datetime.strptime("2025-02-01", "%Y-%m-%d"):
-        return {}
-
+    # Poista tai kommentoi pois tämä tarkistus testausta varten
+    # if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
+    #     return {}
+    
+    # Debug-laskurit
+    games_found = 0
+    players_found = 0
+    api_errors = 0
+    
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
     
+    # DEBUG: Tulosta aloitustiedot
+    print(f"\n{'='*60}")
+    print(f"🔍 FETCH LIVE SCORING - DEBUG MODE")
+    print(f"Date range: {start_date} to {end_date}")
+    print(f"Checking {len(dates)} days...")
+    print(f"{'='*60}\n")
+    
     for date_str in dates:
-        if date_str > datetime.now().strftime('%Y-%m-%d'): break
+        # Skip future dates
+        if date_str > datetime.now().strftime('%Y-%m-%d'):
+            print(f"⏭️  {date_str}: Future date, skipping")
+            continue
+            
         try:
             schedule_url = f"https://api-web.nhle.com/v1/schedule/{date_str}"
-            r = requests.get(schedule_url, timeout=2).json()
-            day_data = next((d for d in r.get('gameWeek', []) if d['date'] == date_str), None)
+            print(f"\n📅 Checking date: {date_str}")
+            print(f"   URL: {schedule_url}")
             
-            if day_data:
-                for game in day_data.get('games', []):
-                    if game.get('gameType') == 9:
-                        away_abbr = game.get('awayTeam', {}).get('abbrev')
-                        home_abbr = game.get('homeTeam', {}).get('abbrev')
-                        
-                        box_url = f"https://api-web.nhle.com/v1/gamecenter/{game['id']}/boxscore"
-                        box = requests.get(box_url, timeout=2).json()
+            r = requests.get(schedule_url, timeout=5)
+            print(f"   Response status: {r.status_code}")
+            
+            if r.status_code != 200:
+                print(f"   ❌ API error: Status {r.status_code}")
+                api_errors += 1
+                continue
+                
+            data = r.json()
+            game_week = data.get('gameWeek', [])
+            print(f"   Days in gameWeek: {len(game_week)}")
+            
+            day_data = next((d for d in game_week if d['date'] == date_str), None)
+            
+            if not day_data:
+                print(f"   ⚠️  No data found for {date_str}")
+                continue
+                
+            games = day_data.get('games', [])
+            print(f"   🎮 Total games: {len(games)}")
+            
+            for game in games:
+                game_id = game.get('id')
+                game_type = game.get('gameType')
+                game_state = game.get('gameState')
+                
+                print(f"\n   🏒 Game ID: {game_id}")
+                print(f"      Type: {game_type} (9 = Tournament)")
+                print(f"      State: {game_state}")
+                print(f"      Teams: {game.get('awayTeam', {}).get('abbrev')} @ {game.get('homeTeam', {}).get('abbrev')}")
+                
+                # 4 Nations ja Olympics = gameType 9
+                if game_type == 9:
+                    games_found += 1
+                    away_abbr = game.get('awayTeam', {}).get('abbrev')
+                    home_abbr = game.get('homeTeam', {}).get('abbrev')
+                    
+                    box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
+                    print(f"      📊 Fetching boxscore: {box_url}")
+                    
+                    try:
+                        box = requests.get(box_url, timeout=5).json()
                         
                         for team_type, country_code in [('awayTeam', away_abbr), ('homeTeam', home_abbr)]:
+                            print(f"         Processing {team_type} ({country_code})...")
+                            
                             for group in ['forwards', 'defense', 'goalies']:
                                 players = box.get('playerByGameStats', {}).get(team_type, {}).get(group, [])
+                                print(f"            {group}: {len(players)} players")
+                                
                                 for p in players:
                                     full_name = p.get('name', {}).get('default')
                                     if not full_name:
@@ -123,14 +181,47 @@ def fetch_live_scoring_by_name():
                                     goals = int(p.get('goals', 0))
                                     assists = int(p.get('assists', 0))
                                     
+                                    # DEBUG: Tulosta jokainen pelaaja
+                                    if goals > 0 or assists > 0:
+                                        print(f"            ⭐ {full_name} ({country_code}): G={goals}, A={assists}")
+                                    
                                     if key not in live_stats:
                                         live_stats[key] = {'goals': 0, 'assists': 0}
+                                        players_found += 1
+                                    
                                     live_stats[key]['goals'] += goals
                                     live_stats[key]['assists'] += assists
-        except Exception:
+                                    
+                    except Exception as box_err:
+                        print(f"      ❌ Boxscore error: {box_err}")
+                        api_errors += 1
+                        
+        except Exception as e:
+            print(f"   ❌ Schedule error: {e}")
+            api_errors += 1
             continue
+    
+    # DEBUG: Yhteenveto
+    print(f"\n{'='*60}")
+    print(f"📊 SUMMARY")
+    print(f"{'='*60}")
+    print(f"Games processed: {games_found}")
+    print(f"Unique players: {players_found}")
+    print(f"API errors: {api_errors}")
+    print(f"Stats collected: {len(live_stats)} players")
+    
+    if live_stats:
+        print(f"\n🏆 Top scorers found:")
+        sorted_stats = sorted(live_stats.items(), key=lambda x: x[1]['goals'] + x[1]['assists'], reverse=True)[:10]
+        for name, stats in sorted_stats:
+            total = stats['goals'] + stats['assists']
+            print(f"   {name}: {stats['goals']}G + {stats['assists']}A = {total}pts")
+    else:
+        print(f"\n⚠️  No stats collected - API may not have 4 Nations data")
+    
+    print(f"{'='*60}\n")
+    
     return live_stats
-
 @st.cache_data(ttl=60)
 def get_all_players_data():
     try:
