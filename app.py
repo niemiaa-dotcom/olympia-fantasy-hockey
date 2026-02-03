@@ -27,7 +27,7 @@ def get_deadline_message():
         return "🔒 Olympics have started - team changes are now locked"
 
 # --- SETTINGS ---
-st.set_page_config(page_title="Olympics Fantasy Hockey 2025", page_icon="🏒")
+st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
 
 # --- COUNTRY FLAGS & LIST ---
 COUNTRY_FLAGS = {
@@ -344,7 +344,7 @@ def clear_all_cache():
         return False
 
 # --- UI ---
-st.title("🏒 Olympics Fantasy Hockey 2025")
+st.title("🏒 Olympics Fantasy Hockey 2026")
 
 PLAYERS_DATA = get_all_players_data()
 
@@ -1110,7 +1110,7 @@ elif page == "Admin":
     st.header("🔧 Admin Panel")
     
     admin_pass = st.text_input("Admin Password", type="password", key="admin_password")
-    correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2025")
+    correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2026")
     
     if admin_pass == correct_password:
         st.success("✅ Admin access granted")
