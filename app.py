@@ -221,60 +221,139 @@ if page == "Home":
     """)
 
 elif page == "Create Team":
-    st.header("📝 Create or Edit Your Team")
+    st.header("📝 Create Your Olympic Roster")
     
+    with st.expander("ℹ️ Rules & Instructions", expanded=True):
+        st.write("""
+        **Roster Requirements:**
+        1. Select exactly **7 Forwards** and **3 Defensemen**.
+        2. **One Player Per Nation Rule:** You can select maximum **1 player** from any single country.
+        3. Goaltenders are not included in this format.
+        """)
+
     with st.form("team_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            team_name = st.text_input("Team Name", placeholder="e.g., Puck Dynasty")
-        with col2:
-            pin = st.text_input("PIN Code", type="password", placeholder="4-10 digits")
+        # 1. TEAM INFO
+        c1, c2 = st.columns(2)
+        team_name = c1.text_input("Team Name", placeholder="e.g. Miracle on Ice")
+        pin = c2.text_input("PIN Code", type="password", placeholder="4-10 digits")
         
         st.divider()
-        st.subheader("Select Your Players")
+        st.subheader("Select Players by Country")
         
-        # FILTER PLAYERS (Nyt käyttää "F", "D", "G" csv-tiedostosta)
-        # Sallitaan myös C, L, R jos joku käyttää vanhaa dataa
-        forwards = [p for p in PLAYERS_DATA if p.get("position") in ["F", "C", "L", "R"]]
-        defense = [p for p in PLAYERS_DATA if p.get("position") == "D"]
-        goalies = [p for p in PLAYERS_DATA if p.get("position") == "G"]
+        # 2. DATA PREPARATION
+        # Ryhmitellään pelaajat maittain
+        players_by_country = {}
+        for p in PLAYERS_DATA:
+            country = p['teamName']['default']
+            if country not in players_by_country:
+                players_by_country[country] = {'F': [], 'D': []}
+            
+            # Normalisoidaan pelipaikat (F = hyökkääjä, D = pakki)
+            pos = p['position']
+            if pos in ['C', 'L', 'R', 'F']:
+                players_by_country[country]['F'].append(p)
+            elif pos == 'D':
+                players_by_country[country]['D'].append(p)
+
+        # Järjestetään maat aakkosjärjestykseen
+        sorted_countries = sorted(players_by_country.keys())
         
-        # Järjestä aakkosjärjestykseen
-        forwards.sort(key=lambda x: x['firstName']['default'])
-        defense.sort(key=lambda x: x['firstName']['default'])
+        # Tähän kerätään käyttäjän valinnat
+        selected_player_ids = []
         
-        # Luo valinnat (Näytetään Nimi + Maa)
-        f_options = {f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']})": p['playerId'] for p in forwards}
-        d_options = {f"{p['firstName']['default']} {p['lastName']['default']} ({p['teamName']['default']})": p['playerId'] for p in defense}
+        # 3. RENDER PLAYER SELECTION (Checkboxes)
+        # Käydään läpi jokainen maa ja luodaan Expander
+        for country in sorted_countries:
+            with st.expander(f"🏁 {country}"):
+                col_f, col_d = st.columns(2)
+                
+                # Hyökkääjät vasemmalle
+                with col_f:
+                    st.markdown("**Forwards**")
+                    for p in players_by_country[country]['F']:
+                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                        # Checkboxin avain on uniikki pelaaja-ID
+                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                            selected_player_ids.append(p['playerId'])
+                            
+                # Pakit oikealle
+                with col_d:
+                    st.markdown("**Defensemen**")
+                    for p in players_by_country[country]['D']:
+                        label = f"{p['firstName']['default']} {p['lastName']['default']}"
+                        if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                            selected_player_ids.append(p['playerId'])
+
+        # 4. REAL-TIME VALIDATION LOGIC
+        # Huom: Streamlitissä checkboxien tila luetaan vasta kun koodi ajetaan.
+        # Validointi tapahtuu tässä "submit"-napin painalluksen yhteydessä tai 
+        # aina kun käyttäjä klikkaa jotain (koska scripti ajaa uudestaan).
         
-        st.write(f"**Available Forwards:** {len(forwards)}")
-        selected_f_names = st.multiselect("Choose 3 Forwards", list(f_options.keys()), max_selections=3)
+        # Analysoidaan valinnat
+        stats_counts = {'F': 0, 'D': 0}
+        country_counts = {}
         
-        st.write(f"**Available Defensemen:** {len(defense)}")
-        selected_d_names = st.multiselect("Choose 2 Defensemen", list(d_options.keys()), max_selections=2)
+        # Luodaan hakukartta jotta saadaan pelaajan tiedot ID:llä
+        player_map = {p['playerId']: p for p in PLAYERS_DATA}
         
-        submit = st.form_submit_button("💾 Save Team", type="primary")
+        for pid in selected_player_ids:
+            p = player_map[pid]
+            
+            # Pelipaikka
+            pos = 'D' if p['position'] == 'D' else 'F'
+            stats_counts[pos] += 1
+            
+            # Maa
+            ctry = p['teamName']['default']
+            country_counts[ctry] = country_counts.get(ctry, 0) + 1
+
+        # 5. DISPLAY STATUS (Feedback UI)
+        st.divider()
+        st.subheader("Draft Status")
+        
+        s1, s2, s3 = st.columns(3)
+        
+        # Forwards Status
+        f_color = "green" if stats_counts['F'] == 7 else "red"
+        s1.markdown(f"Forwards: :{f_color}[**{stats_counts['F']} / 7**]")
+        
+        # Defense Status
+        d_color = "green" if stats_counts['D'] == 3 else "red"
+        s2.markdown(f"Defensemen: :{d_color}[**{stats_counts['D']} / 3**]")
+        
+        # Country Rule Status
+        violation_countries = [c for c, count in country_counts.items() if count > 1]
+        if not violation_countries:
+            s3.markdown("Country Rule: :green[**OK**]")
+        else:
+            s3.markdown(f"Country Rule: :red[**VIOLATION ({', '.join(violation_countries)})**]")
+
+        # 6. SUBMIT BUTTON & FINAL CHECK
+        submit = st.form_submit_button("💾 Validate & Save Team", type="primary")
         
         if submit:
-            if not team_name or not pin:
-                st.error("Please enter Name and PIN")
-            elif len(selected_f_names) != 3:
-                st.error(f"Select exactly 3 Forwards (you chose {len(selected_f_names)})")
-            elif len(selected_d_names) != 2:
-                st.error(f"Select exactly 2 Defensemen (you chose {len(selected_d_names)})")
+            errors = []
+            
+            if not team_name:
+                errors.append("Missing Team Name.")
+            if not pin or len(pin) < 4:
+                errors.append("Invalid PIN (min 4 digits).")
+            if stats_counts['F'] != 7:
+                errors.append(f"You must select exactly 7 Forwards (Selected: {stats_counts['F']}).")
+            if stats_counts['D'] != 3:
+                errors.append(f"You must select exactly 3 Defensemen (Selected: {stats_counts['D']}).")
+            if violation_countries:
+                errors.append(f"You have selected multiple players from: {', '.join(violation_countries)}. Only 1 per country allowed.")
+            
+            if errors:
+                for e in errors:
+                    st.error(e)
             else:
-                # Muunnetaan valitut nimet ID:iksi
-                final_ids = []
-                for name in selected_f_names:
-                    final_ids.append(f_options[name])
-                for name in selected_d_names:
-                    final_ids.append(d_options[name])
-                
-                # TALLENNA
-                success, msg = save_team(team_name, pin, final_ids)
+                # Kaikki kunnossa, tallennetaan!
+                success, msg = save_team(team_name, pin, selected_player_ids)
                 if success:
-                    st.success(msg)
                     st.balloons()
+                    st.success(f"Team '{team_name}' successfully created! Good luck!")
                 else:
                     st.error(msg)
 
