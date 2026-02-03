@@ -333,6 +333,7 @@ st.title("🏒 Olympics Fantasy Hockey 2025")
 
 PLAYERS_DATA = get_all_players_data()
 
+# --- SIDEBAR ---
 with st.sidebar:
     st.divider()
     st.subheader("⚙️ Debug & Settings")
@@ -351,7 +352,7 @@ with st.sidebar:
             st.text(f"📁 CSV loaded: {d.get('csv_loaded', 'N/A')}")
             st.text(f"👥 CSV players: {d.get('csv_players', 0)}")
             st.text(f"📡 API players: {d.get('api_players_with_stats', 0)}")
-            st.text(f"✅ Matched: {d.get('matched_in_roster', 0)}")  # Käytä get() metodia
+            st.text(f"✅ Matched: {d.get('matched_in_roster', 0)}")
             st.text(f"📊 Total pts: {d.get('total_points', 0)}")
             
             st.divider()
@@ -379,38 +380,21 @@ with st.sidebar:
         else:
             st.info("No debug data available. Refresh to load.")
 
-elif page == "Admin":  # Lisää tämä sivuvalikkoon
-    st.header("🔧 Admin Panel")
-    
-    # Suojaa salasanalla
-    admin_pass = st.text_input("Admin Password", type="password")
-    
-    if admin_pass == st.secrets.get("ADMIN_PASSWORD", "olympics2025"):  # Aseta salasana secrets:iin
-        all_teams = get_all_teams()
-        
-        st.write(f"Total teams: {len(all_teams)}")
-        
-        for team in all_teams:
-            with st.expander(f"{team['team_name']} ({team.get('manager_country', 'N/A')})"):
-                st.json(team)
-                if st.button(f"🗑️ Delete {team['team_name']}", key=f"del_{team['team_name']}"):
-                    db = get_db()
-                    if db:
-                        db.collection("teams").document(team['team_name']).delete()
-                        st.success("Deleted!")
-                        st.rerun()
-    else:
-        st.warning("Enter admin password")
+# --- PAGE NAVIGATION (LISÄÄ ADMIN TÄHÄN) ---
+page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries", "Admin"])
 
-page = st.sidebar.radio("Menu", ["Home", "Create Team", "My Team", "Leaderboard", "Countries"])
+# --- SESSION STATE FOR DELETE CONFIRMATION ---
+if 'confirm_delete' not in st.session_state:
+    st.session_state['confirm_delete'] = False
 
 if page == "Home":
+    # ... (sama kuin ennen)
     st.write("""
     ## Welcome to Olympics Fantasy Hockey 2025!
     
     ### New: Countries Competition! 🌍
     Managers compete not only individually but also for their country's honor!
-    Countries with 4+ managers appear separately. Smaller countries grouped as "Others".
+    Countries with 4+ managers appear separately. Smaller countries are grouped as "Others".
     
     ### Scoring
     | Action | Points |
@@ -420,6 +404,7 @@ if page == "Home":
     """)
 
 elif page == "Create Team":
+    # ... (sama kuin ennen, mutta korjattu checkbox-key)
     st.header("📝 Create Your Olympic Roster")
     
     with st.expander("ℹ️ Rules", expanded=True):
@@ -453,14 +438,14 @@ elif page == "Create Team":
     
     # Data prep
     players_by_country = {}
-    for idx, p in enumerate(PLAYERS_DATA):  # Lisätään indeksi
+    for idx, p in enumerate(PLAYERS_DATA):
         country = p['teamName']['default']
         if country not in players_by_country:
             players_by_country[country] = {'F': [], 'D': []}
         
         pos = p['position']
         if pos in ['C', 'L', 'R', 'F']:
-            players_by_country[country]['F'].append((idx, p))  # Tuple (indeksi, pelaaja)
+            players_by_country[country]['F'].append((idx, p))
         elif pos == 'D':
             players_by_country[country]['D'].append((idx, p))
 
@@ -479,7 +464,6 @@ elif page == "Create Team":
                 st.markdown("**Forwards**")
                 for idx, p in players_by_country[country]['F']:
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    # Käytä indeksiä mukana avaimessa jotta on varmasti uniikki
                     if st.checkbox(label, key=f"chk_f_{country}_{idx}"):
                         selected_player_ids.append(p['playerId'])
                         
@@ -487,10 +471,10 @@ elif page == "Create Team":
                 st.markdown("**Defensemen**")
                 for idx, p in players_by_country[country]['D']:
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    # Käytä indeksiä mukana avaimessa
                     if st.checkbox(label, key=f"chk_d_{country}_{idx}"):
                         selected_player_ids.append(p['playerId'])
 
+    # REAL-TIME Validation
     stats_counts = {'F': 0, 'D': 0}
     country_counts = {}
     player_map = {p['playerId']: p for p in PLAYERS_DATA}
@@ -547,6 +531,7 @@ elif page == "Create Team":
                     st.error(msg)
 
 elif page == "My Team":
+    # ... (sama kuin ennen, mutta lisätty poisto-toiminto)
     st.header("👤 View Your Team")
     
     with st.form("login_form"):
@@ -578,7 +563,6 @@ elif page == "My Team":
                 conf_col1, conf_col2 = st.columns(2)
                 with conf_col1:
                     if st.button("✅ Yes, Delete", type="primary", key="confirm_yes"):
-                        # Poista Firebase:stä
                         db = get_db()
                         if db:
                             try:
@@ -631,6 +615,7 @@ elif page == "My Team":
             st.error("Invalid Team Name or PIN")
 
 elif page == "Leaderboard":
+    # ... (sama kuin ennen)
     st.header("🏆 Individual Leaderboard")
 
     col1, col2 = st.columns([3, 1])
@@ -736,6 +721,7 @@ elif page == "Leaderboard":
         st.info("No teams registered yet!")
 
 elif page == "Countries":
+    # ... (sama kuin ennen)
     st.header("🌍 Countries Competition")
     st.write("Managers compete for national pride! Countries with 4+ managers shown separately. Smaller countries grouped as 'Others'.")
     
@@ -794,3 +780,82 @@ elif page == "Countries":
                         <div style='font-size: 0.9rem;'>({stats['managers']} managers)</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+# --- UUSI ADMIN-SIVU ---
+elif page == "Admin":
+    st.header("🔧 Admin Panel")
+    
+    # Suojaa salasanalla
+    admin_pass = st.text_input("Admin Password", type="password", key="admin_password")
+    
+    # Tarkista salasana secrets:stä tai käytä oletusta
+    correct_password = st.secrets.get("ADMIN_PASSWORD", "olympics2025")
+    
+    if admin_pass == correct_password:
+        st.success("✅ Admin access granted")
+        
+        # Hae kaikki joukkueet
+        all_teams = get_all_teams()
+        
+        st.subheader(f"All Teams ({len(all_teams)} total)")
+        
+        if not all_teams:
+            st.info("No teams found in database")
+        else:
+            # Yhteenveto
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Teams", len(all_teams))
+            
+            # Näytä joukkueet taulukossa
+            team_summary = []
+            for team in all_teams:
+                team_summary.append({
+                    "Team Name": team.get('team_name', 'N/A'),
+                    "Manager Country": team.get('manager_country', 'N/A'),
+                    "Created": team.get('created_at', 'N/A'),
+                    "Players": len(team.get('player_ids', []))
+                })
+            
+            st.dataframe(pd.DataFrame(team_summary), use_container_width=True)
+            
+            st.divider()
+            st.subheader("🗑️ Delete Teams")
+            
+            # Valitse poistettava joukkue
+            team_to_delete = st.selectbox(
+                "Select team to delete:",
+                options=[t['team_name'] for t in all_teams],
+                key="admin_delete_select"
+            )
+            
+            if team_to_delete:
+                # Näytä joukkueen tiedot
+                team_data = next((t for t in all_teams if t['team_name'] == team_to_delete), None)
+                if team_data:
+                    with st.expander("View Team Details"):
+                        st.json(team_data)
+                
+                # Vahvistus
+                confirm = st.checkbox(f"I confirm I want to delete '{team_to_delete}'", key="admin_confirm")
+                
+                if confirm and st.button("🗑️ Permanently Delete", type="primary", key="admin_delete_btn"):
+                    db = get_db()
+                    if db:
+                        try:
+                            db.collection("teams").document(team_to_delete).delete()
+                            st.success(f"✅ Team '{team_to_delete}' deleted successfully!")
+                            st.balloons()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Error deleting team: {e}")
+                    else:
+                        st.error("❌ Database connection failed")
+        
+        # Debug: Näytä raaka data
+        st.divider()
+        if st.checkbox("Show raw database data"):
+            st.json(all_teams)
+            
+    elif admin_pass:
+        st.error("❌ Incorrect password")
+        st.info("Hint: Check your secrets.toml or app settings for ADMIN_PASSWORD")
