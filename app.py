@@ -428,8 +428,4 @@ elif page == "Leaderboard":
     df = pd.DataFrame(rankings).sort_values("Points", ascending=False).reset_index(drop=True)
     df.index += 1
     st.dataframe(df, use_container_width=True)
-'''
 
-# Tallennetaan
-with open('/mnt/kimi/output/app_with_flags.py', 'w', encoding='utf-8') as f:
-    f.write(app_with_flags)
