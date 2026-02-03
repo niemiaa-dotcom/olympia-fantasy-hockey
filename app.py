@@ -366,6 +366,42 @@ def get_country_leaderboard():
     results.sort(key=lambda x: x["avg_points"], reverse=True)
     return results
 
+# --- REFRESH UTILITIES ---
+def clear_all_cache():
+    """Clear all cached data functions"""
+    try:
+        fetch_live_scoring_by_name.clear()
+        get_all_players_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Error clearing cache: {e}")
+        return False
+
+# --- SIDEBAR CONTROLS ---
+with st.sidebar:
+    st.divider()
+    st.subheader("⚙️ Settings")
+    
+    # Debug mode toggle
+    if st.toggle("Debug Mode", value=False, key="debug_toggle"):
+        st.info("Cache TTL: 60s")
+        # Clear cache immediately when enabling debug
+        if 'debug_enabled' not in st.session_state:
+            clear_all_cache()
+            st.session_state.debug_enabled = True
+    
+    # Manual refresh
+    if st.button("🔄 Force Refresh", use_container_width=True, type="primary"):
+        with st.spinner("Fetching fresh data..."):
+            if clear_all_cache():
+                st.success("Data refreshed!")
+                st.rerun()
+    
+    # Show cache info
+    if st.checkbox("Show debug info"):
+        st.write(f"Cache key: {datetime.now().strftime('%H:%M:%S')}")
+        st.write(f"Players loaded: {len(PLAYERS_DATA)}")
+
 # --- UI ---
 st.title("🏒 Olympics Fantasy Hockey 2025")
 st.caption("Keeping Karlsson Community Fantasy Game")
