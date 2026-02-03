@@ -276,4 +276,3 @@ if page == "Create Team":
                 st.rerun()
             else:
                 st.error(msg)
-
