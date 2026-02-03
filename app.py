@@ -707,11 +707,10 @@ elif page == "Create Team":
     
     with st.expander("ℹ️ Rules", expanded=True):
         st.write("""
-        ### New Rules for 2026 Olympics! 🏒
+        ### Olympics Fantasy Hockey 2026! 🏒
         
-        - **Select exactly 11 players** (one from each Olympic nation)
-        - **Minimum 4 defensemen** (D)
-        - **Maximum 7 forwards** (F)
+        - **Select exactly 12 players** (one from each of the 12 Olympic nations)
+        - **Exactly 8 forwards** (F) and **4 defensemen** (D)
         - **Exactly 1 player per country** - you cannot select two players from the same nation!
         - Select your **manager nationality** for country competition!
         """)
