@@ -534,11 +534,11 @@ with st.expander("ℹ️ Rules", expanded=True):
                     st.error(msg)
 
 
-# 11 maata, joista jokaisesta täsmälleen 1 pelaaja
+# 12 maata, joista jokaisesta täsmälleen 1 pelaaja
 OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
                  "SVK", "SWE", "SUI", "USA"]
 
-# --- MY TEAM SIVU (korjattu poisto) ---
+
 # --- COUNTRIES SIVU ---
 elif page == "Countries":
     st.header("🌍 Countries Competition")
