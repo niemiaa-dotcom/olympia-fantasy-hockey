@@ -427,17 +427,18 @@ elif page == "Create Team":
     st.divider()
     st.subheader("Select Players by Country")
     
+    # Data prep
     players_by_country = {}
-    for p in PLAYERS_DATA:
+    for idx, p in enumerate(PLAYERS_DATA):  # Lisätään indeksi
         country = p['teamName']['default']
         if country not in players_by_country:
             players_by_country[country] = {'F': [], 'D': []}
         
         pos = p['position']
         if pos in ['C', 'L', 'R', 'F']:
-            players_by_country[country]['F'].append(p)
+            players_by_country[country]['F'].append((idx, p))  # Tuple (indeksi, pelaaja)
         elif pos == 'D':
-            players_by_country[country]['D'].append(p)
+            players_by_country[country]['D'].append((idx, p))
 
     sorted_countries = sorted(players_by_country.keys())
     selected_player_ids = []
@@ -452,16 +453,18 @@ elif page == "Create Team":
             
             with col_f:
                 st.markdown("**Forwards**")
-                for p in players_by_country[country]['F']:
+                for idx, p in players_by_country[country]['F']:
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                    # Käytä indeksiä mukana avaimessa jotta on varmasti uniikki
+                    if st.checkbox(label, key=f"chk_f_{country}_{idx}"):
                         selected_player_ids.append(p['playerId'])
                         
             with col_d:
                 st.markdown("**Defensemen**")
-                for p in players_by_country[country]['D']:
+                for idx, p in players_by_country[country]['D']:
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
-                    if st.checkbox(label, key=f"chk_{p['playerId']}"):
+                    # Käytä indeksiä mukana avaimessa
+                    if st.checkbox(label, key=f"chk_d_{country}_{idx}"):
                         selected_player_ids.append(p['playerId'])
 
     stats_counts = {'F': 0, 'D': 0}
