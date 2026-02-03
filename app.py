@@ -13,14 +13,43 @@ from collections import defaultdict
 st.set_page_config(page_title="Olympics Fantasy Hockey 2026", page_icon="🏒")
 
 # --- COUNTRY FLAGS & LIST ---
+# Using Unicode escape sequences for flag emojis to ensure proper rendering
 COUNTRY_FLAGS = {
-    "AUS": "🇦🇺", "AUT": "🇦🇹", "BEL": "🇧🇪", "BRA": "🇧🇷", "CAN": "🇨🇦", 
-    "CHN": "🇨🇳", "CZE": "🇨🇿", "DEN": "🇩🇰", "EST": "🇪🇪", "FIN": "🇫🇮", 
-    "FRA": "🇫🇷", "GER": "🇩🇪", "GBR": "🇬🇧", "HUN": "🇭🇺", "IND": "🇮🇳",
-    "IRL": "🇮🇪", "ITA": "🇮🇹", "JPN": "🇯🇵", "KOR": "🇰🇷", "LAT": "🇱🇻",
-    "LTU": "🇱🇹", "MEX": "🇲🇽", "NED": "🇳🇱", "NOR": "🇳🇴", "NZL": "🇳🇿",
-    "POL": "🇵🇱", "RUS": "🇷🇺", "SVK": "🇸🇰", "SLO": "🇸🇮", "ESP": "🇪🇸",
-    "SWE": "🇸🇪", "SUI": "🇨🇭", "UKR": "🇺🇦", "USA": "🇺🇸", "OTHERS": "🌍"
+    "AUS": "\U0001F1E6\U0001F1FA",  # 🇦🇺 Australia
+    "AUT": "\U0001F1E6\U0001F1F9",  # 🇦🇹 Austria
+    "BEL": "\U0001F1E7\U0001F1EA",  # 🇧🇪 Belgium
+    "BRA": "\U0001F1E7\U0001F1F7",  # 🇧🇷 Brazil
+    "CAN": "\U0001F1E8\U0001F1E6",  # 🇨🇦 Canada
+    "CHN": "\U0001F1E8\U0001F1F3",  # 🇨🇳 China
+    "CZE": "\U0001F1E8\U0001F1FF",  # 🇨🇿 Czechia
+    "DEN": "\U0001F1E9\U0001F1F0",  # 🇩🇰 Denmark
+    "EST": "\U0001F1EA\U0001F1EA",  # 🇪🇪 Estonia
+    "FIN": "\U0001F1EB\U0001F1EE",  # 🇫🇮 Finland
+    "FRA": "\U0001F1EB\U0001F1F7",  # 🇫🇷 France
+    "GER": "\U0001F1E9\U0001F1EA",  # 🇩🇪 Germany
+    "GBR": "\U0001F1EC\U0001F1E7",  # 🇬🇧 Great Britain
+    "HUN": "\U0001F1ED\U0001F1FA",  # 🇭🇺 Hungary
+    "IND": "\U0001F1EE\U0001F1F3",  # 🇮🇳 India
+    "IRL": "\U0001F1EE\U0001F1EA",  # 🇮🇪 Ireland
+    "ITA": "\U0001F1EE\U0001F1F9",  # 🇮🇹 Italy
+    "JPN": "\U0001F1EF\U0001F1F5",  # 🇯🇵 Japan
+    "KOR": "\U0001F1F0\U0001F1F7",  # 🇰🇷 South Korea
+    "LAT": "\U0001F1F1\U0001F1FB",  # 🇱🇻 Latvia
+    "LTU": "\U0001F1F1\U0001F1F9",  # 🇱🇹 Lithuania
+    "MEX": "\U0001F1F2\U0001F1FD",  # 🇲🇽 Mexico
+    "NED": "\U0001F1F3\U0001F1F1",  # 🇳🇱 Netherlands
+    "NOR": "\U0001F1F3\U0001F1F4",  # 🇳🇴 Norway
+    "NZL": "\U0001F1F3\U0001F1FF",  # 🇳🇿 New Zealand
+    "POL": "\U0001F1F5\U0001F1F1",  # 🇵🇱 Poland
+    "RUS": "\U0001F1F7\U0001F1FA",  # 🇷🇺 Russia
+    "SVK": "\U0001F1F8\U0001F1F0",  # 🇸🇰 Slovakia
+    "SLO": "\U0001F1F8\U0001F1EE",  # 🇸🇮 Slovenia
+    "ESP": "\U0001F1EA\U0001F1F8",  # 🇪🇸 Spain
+    "SWE": "\U0001F1F8\U0001F1EA",  # 🇸🇪 Sweden
+    "SUI": "\U0001F1E8\U0001F1ED",  # 🇨🇭 Switzerland
+    "UKR": "\U0001F1FA\U0001F1E6",  # 🇺🇦 Ukraine
+    "USA": "\U0001F1FA\U0001F1F8",  # 🇺🇸 United States
+    "OTHERS": "\U0001F30D"          # 🌍 World
 }
 
 # Olympics participants + major countries
