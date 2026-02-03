@@ -31,6 +31,125 @@ def init_firebase():
         firebase_admin.initialize_app(cred)
     return firestore.client()
 
+import unicodedata
+
+def clean_name(name):
+    """
+    Siivoaa nimen vertailua varten.
+    Muuttaa kaiken pieneksi ja poistaa aksentit (esim. Stützle -> stutzle).
+    """
+    if not name: return ""
+    # Normalisointi: é -> e, ü -> u, jne.
+    n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
+    return n.lower().strip()
+
+@st.cache_data(ttl=300)
+def fetch_live_scoring_by_name():
+    """
+    Hakee pisteet ja tallentaa ne avaimella "etunimisukunimi_maa".
+    Esim: "sebastianaho_fin": {goals: 1, assists: 1}
+    """
+    start_date = "2026-02-12"
+    end_date = "2026-02-22"
+    
+    # Sanakirja pisteille: avaimena "nimi_maa"
+    live_stats = {} 
+    
+    # (Tässä sama päivämäärälooppi kuin aiemmin...)
+    dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
+    for date_str in dates:
+        if date_str > datetime.now().strftime('%Y-%m-%d'): break
+            
+        try:
+            schedule_url = f"https://api-web.nhle.com/v1/schedule/{date_str}"
+            r = requests.get(schedule_url, timeout=2).json()
+            
+            day_data = next((d for d in r.get('gameWeek', []) if d['date'] == date_str), None)
+            if day_data:
+                for game in day_data.get('games', []):
+                    if game.get('gameType') == 9: # Olympiapeli
+                        
+                        # Selvitetään joukkueiden lyhenteet (esim. FIN, SWE)
+                        away_abbr = game.get('awayTeam', {}).get('abbrev')
+                        home_abbr = game.get('homeTeam', {}).get('abbrev')
+                        
+                        box_url = f"https://api-web.nhle.com/v1/gamecenter/{game['id']}/boxscore"
+                        box = requests.get(box_url, timeout=2).json()
+                        
+                        # Käsitellään pelaajat
+                        for team_type, country_code in [('awayTeam', away_abbr), ('homeTeam', home_abbr)]:
+                            for group in ['forwards', 'defense', 'goalies']:
+                                players = box.get('playerByGameStats', {}).get(team_type, {}).get(group, [])
+                                
+                                for p in players:
+                                    # Rakennetaan nimi APIsta
+                                    # NHL API:ssa nimi on usein objektissa name: {default: "Matti Meikäläinen"}
+                                    full_name = p.get('name', {}).get('default')
+                                    if not full_name:
+                                        fn = p.get('firstName', {}).get('default', '')
+                                        ln = p.get('lastName', {}).get('default', '')
+                                        full_name = f"{fn} {ln}"
+                                    
+                                    # Luodaan YKSILÖIVÄ avain: "nimi_maa"
+                                    # Esim: "sebastianaho_fin"
+                                    key = f"{clean_name(full_name)}_{clean_name(country_code)}"
+                                    
+                                    goals = int(p.get('goals', 0))
+                                    assists = int(p.get('assists', 0))
+                                    
+                                    if key not in live_stats:
+                                        live_stats[key] = {'goals': 0, 'assists': 0}
+                                    
+                                    live_stats[key]['goals'] += goals
+                                    live_stats[key]['assists'] += assists
+                                    
+        except Exception as e:
+            print(f"Virhe päivässä {date_str}: {e}")
+            
+    return live_stats
+
+def get_combined_stats():
+    """Yhdistää CSV:n ja API-pisteet nimen+maan perusteella."""
+    
+    # 1. Lataa CSV (jossa ei tarvitse olla ID:tä)
+    try:
+        df = pd.read_csv("olympic_players.csv") # Nyt luetaan se alkuperäinen tiedosto
+        base_roster = df.to_dict('records')
+    except:
+        return [] # Tai palauta testidataa
+
+    # 2. Lataa live-pisteet (avaimena "nimi_maa")
+    live_scores = fetch_live_scoring_by_name()
+    
+    final_list = []
+    
+    for player in base_roster:
+        # Rakennetaan sama avain CSV-datasta
+        f_name = player['firstName']
+        l_name = player['lastName']
+        country = player['teamName'] # Esim "FIN", "CAN"
+        
+        full_name_csv = f"{f_name} {l_name}"
+        search_key = f"{clean_name(full_name_csv)}_{clean_name(country)}"
+        
+        # Haetaan pisteet avaimella
+        stats = live_scores.get(search_key, {'goals': 0, 'assists': 0})
+        
+        # Lisätään listaan
+        final_list.append({
+            # Huom: Emme tarvitse enää ID:tä UI:ssa, mutta voimme luoda feikin jos tarpeen
+            "playerId": search_key, # Käytetään avainta ID:nä, se on uniikki!
+            "firstName": {"default": f_name},
+            "lastName": {"default": l_name},
+            "teamName": {"default": country},
+            "position": player['position'],
+            "goals": stats['goals'],
+            "assists": stats['assists'],
+            "points": stats['goals'] + stats['assists']
+        })
+        
+    return final_list
+
 
 def get_db():
     return init_firebase()
