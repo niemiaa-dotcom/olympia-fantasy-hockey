@@ -533,12 +533,74 @@ with st.expander("ℹ️ Rules", expanded=True):
                 else:
                     st.error(msg)
 
-# --- LISÄÄ OLYMPIC TEAMS ---
+
 # 11 maata, joista jokaisesta täsmälleen 1 pelaaja
 OLYMPIC_TEAMS = ["CAN", "CZE", "DEN", "FIN", "FRA", "GER", "ITA", "LAT", 
                  "SVK", "SWE", "SUI", "USA"]
 
 # --- MY TEAM SIVU (korjattu poisto) ---
+# --- COUNTRIES SIVU ---
+elif page == "Countries":
+    st.header("🌍 Countries Competition")
+    st.write("Managers compete for national pride! Countries with **3+ managers** appear separately. Smaller countries grouped as 'Others'.")
+    
+    country_stats = get_country_leaderboard()
+    
+    if not country_stats:
+        st.info("No teams registered yet!")
+    else:
+        display_data = []
+        for i, stats in enumerate(country_stats, 1):
+            if stats['code'] == "OTHERS":
+                countries_text = ", ".join([get_country_display(c) for c in stats['countries']])
+            else:
+                countries_text = get_country_display(stats['code'])
+            
+            display_data.append({
+                "Rank": i,
+                "Country": countries_text,
+                "Managers": stats['managers'],
+                "Avg Points": stats['avg_points'],
+                "Best": stats['best_score']
+            })
+        
+        df = pd.DataFrame(display_data)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                "Country": st.column_config.TextColumn("Country/Group", width="large"),
+                "Managers": st.column_config.NumberColumn("Managers", width="small"),
+                "Avg Points": st.column_config.NumberColumn("Avg Points", width="small"),
+                "Best": st.column_config.NumberColumn("Best Score", width="small")
+            }
+        )
+        
+        if len(country_stats) >= 3:
+            st.divider()
+            cols = st.columns(3)
+            medals = ["🥇", "🥈", "🥉"]
+            colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
+            
+            for i in range(min(3, len(country_stats))):
+                stats = country_stats[i]
+                with cols[i]:
+                    flag = get_flag(stats['code'])
+                    name = "Others" if stats['code'] == "OTHERS" else stats['name']
+                    
+                    st.markdown(f"""
+                    <div style='text-align: center; padding: 20px; background-color: {colors[i]}; border-radius: 10px;'>
+                        <div style='font-size: 4rem;'>{medals[i]}</div>
+                        <div style='font-size: 2rem;'>{flag}</div>
+                        <div style='font-size: 1.3rem; font-weight: bold;'>{name}</div>
+                        <div style='font-size: 1.1rem;'>{stats['avg_points']} avg pts</div>
+                        <div style='font-size: 0.9rem;'>({stats['managers']} managers)</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+# --- MY TEAM SIVU ---
 elif page == "My Team":
     st.header("👤 View Your Team")
     
@@ -573,7 +635,6 @@ elif page == "My Team":
         
         st.success(f"Team: {target_team['team_name']} | Manager: {get_country_display(manager_country)}")
         
-        # Poisto-toiminto
         if not st.session_state['show_delete_confirm']:
             if st.button("🗑️ Delete Team", type="secondary"):
                 st.session_state['show_delete_confirm'] = True
@@ -603,7 +664,6 @@ elif page == "My Team":
                     st.session_state['show_delete_confirm'] = False
                     st.rerun()
         
-        # Rosterin näyttö
         if st.session_state['logged_in_team']:
             player_map = {p['playerId']: p for p in PLAYERS_DATA}
             
