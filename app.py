@@ -89,112 +89,72 @@ def fetch_live_scoring_by_name():
     end_date = "2025-02-20"
     live_stats = {}
     
-    # Poista päivämäärächeck väliaikaisesti
-    # if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
-    #     return {}
-    
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
     
-    # DEBUG: Näytä Streamlitissä
-    debug_container = st.empty()
-    debug_logs = []
-    
-    def log(msg):
-        debug_logs.append(msg)
-        debug_container.code("\n".join(debug_logs[-20:]), language="bash")  # Näytä viimeiset 20 riviä
-    
-    log(f"🔍 Starting fetch for {len(dates)} days")
-    log(f"Today is: {datetime.now().strftime('%Y-%m-%d')}")
+    # Debug-laskurit
+    games_found = 0
+    tournament_games_found = 0
     
     for date_str in dates:
         if date_str > datetime.now().strftime('%Y-%m-%d'):
-            log(f"⏭️  Skipping future date: {date_str}")
             continue
             
         try:
             schedule_url = f"https://api-web.nhle.com/v1/schedule/{date_str}"
-            log(f"\n📅 {date_str}: Fetching schedule...")
+            r = requests.get(schedule_url, timeout=5).json()
             
-            r = requests.get(schedule_url, timeout=5)
-            log(f"   Status: {r.status_code}")
-            
-            if r.status_code != 200:
-                log(f"   ❌ HTTP Error {r.status_code}")
-                continue
-            
-            data = r.json()
-            game_week = data.get('gameWeek', [])
-            log(f"   gameWeek days: {len(game_week)}")
-            
+            game_week = r.get('gameWeek', [])
             day_data = next((d for d in game_week if d.get('date') == date_str), None)
             
             if not day_data:
-                log(f"   ⚠️  No day_data found")
                 continue
             
             games = day_data.get('games', [])
-            log(f"   🎮 Games found: {len(games)}")
             
-            tournament_games = [g for g in games if g.get('gameType') == 9]
-            log(f"   🏒 Tournament games (type=9): {len(tournament_games)}")
-            
-            for game in tournament_games:
+            for game in games:
                 game_id = game.get('id')
-                away = game.get('awayTeam', {}).get('abbrev')
-                home = game.get('homeTeam', {}).get('abbrev')
-                log(f"\n   📊 Game {game_id}: {away} @ {home}")
+                game_type = game.get('gameType')
+                away_abbr = game.get('awayTeam', {}).get('abbrev')
+                home_abbr = game.get('homeTeam', {}).get('abbrev')
                 
-                box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
-                try:
-                    box = requests.get(box_url, timeout=5).json()
+                # TARKISTA: 4 Nations = 19, Olympics = 9
+                if game_type in [9, 19]:  # ✅ Ota molemmat!
+                    tournament_games_found += 1
                     
-                    for team_type, country in [('awayTeam', away), ('homeTeam', home)]:
-                        team_data = box.get('playerByGameStats', {}).get(team_type, {})
+                    box_url = f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
+                    
+                    try:
+                        box = requests.get(box_url, timeout=5).json()
                         
-                        for group in ['forwards', 'defense', 'goalies']:
-                            players = team_data.get(group, [])
-                            scorers = [p for p in players if p.get('goals', 0) > 0 or p.get('assists', 0) > 0]
+                        for team_type, country_code in [('awayTeam', away_abbr), ('homeTeam', home_abbr)]:
+                            team_stats = box.get('playerByGameStats', {}).get(team_type, {})
                             
-                            if scorers:
-                                log(f"      {country} {group}: {len(scorers)} scorers")
-                                for p in scorers[:3]:  # Näytä max 3 per ryhmä
-                                    name = p.get('name', {}).get('default', 'Unknown')
-                                    g = p.get('goals', 0)
-                                    a = p.get('assists', 0)
-                                    log(f"         {name}: {g}G {a}A")
-                            
-                            for p in players:
-                                name = p.get('name', {}).get('default', '')
-                                if not name:
-                                    fn = p.get('firstName', {}).get('default', '')
-                                    ln = p.get('lastName', {}).get('default', '')
-                                    name = f"{fn} {ln}"
+                            for group in ['forwards', 'defense', 'goalies']:
+                                players = team_stats.get(group, [])
                                 
-                                key = f"{clean_name(name)}_{clean_name(country)}"
-                                
-                                if key not in live_stats:
-                                    live_stats[key] = {'goals': 0, 'assists': 0}
-                                
-                                live_stats[key]['goals'] += int(p.get('goals', 0))
-                                live_stats[key]['assists'] += int(p.get('assists', 0))
-                                
-                except Exception as e:
-                    log(f"   ❌ Boxscore error: {str(e)[:50]}")
-                    
-        except Exception as e:
-            log(f"   ❌ Schedule error: {str(e)[:50]}")
+                                for p in players:
+                                    full_name = p.get('name', {}).get('default')
+                                    if not full_name:
+                                        fn = p.get('firstName', {}).get('default', '')
+                                        ln = p.get('lastName', {}).get('default', '')
+                                        full_name = f"{fn} {ln}"
+                                    
+                                    key = f"{clean_name(full_name)}_{clean_name(country_code)}"
+                                    
+                                    goals = int(p.get('goals', 0))
+                                    assists = int(p.get('assists', 0))
+                                    
+                                    if key not in live_stats:
+                                        live_stats[key] = {'goals': 0, 'assists': 0}
+                                    
+                                    live_stats[key]['goals'] += goals
+                                    live_stats[key]['assists'] += assists
+                                    
+                    except Exception:
+                        continue
+                        
+        except Exception:
             continue
-    
-    log(f"\n{'='*40}")
-    log(f"SUMMARY: {len(live_stats)} players with stats")
-    
-    if live_stats:
-        top = sorted(live_stats.items(), key=lambda x: x[1]['goals']+x[1]['assists'], reverse=True)[:5]
-        log("Top 5 scorers:")
-        for name, stats in top:
-            log(f"  {name}: {stats['goals']}G {stats['assists']}A")
-    else:
-        log("⚠️  NO STATS FOUND - API may have removed 4 Nations data")
     
     return live_stats
 
