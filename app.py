@@ -128,11 +128,15 @@ def fetch_live_scoring_by_name():
                                 players = team_stats.get(group, [])
                                 
                                 for p in players:
-                                    full_name = p.get('name', {}).get('default')
-                                    if not full_name:
-                                        fn = p.get('firstName', {}).get('default', '')
-                                        ln = p.get('lastName', {}).get('default', '')
+                                    # KÄYTÄ firstName JA lastName ERILLISEEN
+                                    fn = p.get('firstName', {}).get('default', '')
+                                    ln = p.get('lastName', {}).get('default', '')
+                                    
+                                    if fn and ln:
                                         full_name = f"{fn} {ln}"
+                                    else:
+                                        # Fallback jos kentät puuttuvat
+                                        full_name = p.get('name', {}).get('default', '')
                                     
                                     key = f"{clean_name(full_name)}_{clean_name(country_code)}"
                                     
@@ -145,10 +149,10 @@ def fetch_live_scoring_by_name():
                                     live_stats[key]['goals'] += goals
                                     live_stats[key]['assists'] += assists
                                     
-                    except Exception:
+                    except Exception as e:
                         continue
                         
-        except Exception:
+        except Exception as e:
             continue
     
     return live_stats
