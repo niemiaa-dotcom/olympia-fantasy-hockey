@@ -87,7 +87,7 @@ def fetch_live_scoring_by_name():
     end_date = "2026-02-22"
     live_stats = {}
     
-    if datetime.now() < datetime.strptime("2024-02-01", "%Y-%m-%d"):
+    if datetime.now() < datetime.strptime("2026-02-01", "%Y-%m-%d"):
         return {}
 
     dates = pd.date_range(start=start_date, end=end_date).strftime('%Y-%m-%d')
