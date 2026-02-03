@@ -85,6 +85,20 @@ def clean_name(name):
     n = unicodedata.normalize('NFKD', str(name)).encode('ASCII', 'ignore').decode('utf-8')
     return n.lower().strip().replace(" ", "").replace("_", "")
 
+def create_lookup_key(first_name, last_name):
+    """
+    Luo avain joka täsmää API:n formaattiin.
+    API käyttää: eka_kirjain.sukunimi_maa (esim. t.konecny_can)
+    """
+    if not first_name or not last_name:
+        return ""
+    
+    # Ota etunimestä vain ensimmäinen kirjain + piste
+    first_initial = first_name[0].lower()
+    last = clean_name(last_name)
+    
+    return f"{first_initial}.{last}"
+
 @st.cache_data(ttl=60)
 def fetch_live_scoring_by_name():
     start_date = "2025-02-12"
@@ -128,17 +142,16 @@ def fetch_live_scoring_by_name():
                                 players = team_stats.get(group, [])
                                 
                                 for p in players:
-                                    # KÄYTÄ firstName JA lastName ERILLISEEN
-                                    fn = p.get('firstName', {}).get('default', '')
-                                    ln = p.get('lastName', {}).get('default', '')
+                                    # Käytä lyhennettyä nimeä API:sta
+                                    name_default = p.get('name', {}).get('default', '')
                                     
-                                    if fn and ln:
-                                        full_name = f"{fn} {ln}"
+                                    if name_default:
+                                        # Muunna "T. Konecny" → "t.konecny"
+                                        key = f"{clean_name(name_default)}_{clean_name(country_code)}"
                                     else:
-                                        # Fallback jos kentät puuttuvat
-                                        full_name = p.get('name', {}).get('default', '')
-                                    
-                                    key = f"{clean_name(full_name)}_{clean_name(country_code)}"
+                                        fn = p.get('firstName', {}).get('default', '')
+                                        ln = p.get('lastName', {}).get('default', '')
+                                        key = create_lookup_key(fn, ln) + f"_{clean_name(country_code)}"
                                     
                                     goals = int(p.get('goals', 0))
                                     assists = int(p.get('assists', 0))
@@ -149,99 +162,33 @@ def fetch_live_scoring_by_name():
                                     live_stats[key]['goals'] += goals
                                     live_stats[key]['assists'] += assists
                                     
-                    except Exception as e:
+                    except Exception:
                         continue
                         
-        except Exception as e:
+        except Exception:
             continue
     
     return live_stats
 
-
 @st.cache_data(ttl=60)
 def get_all_players_data():
-    # Lataa perusrosteri
     try:
         df = pd.read_csv("olympic_players.csv")
         base_roster = df.to_dict('records')
         csv_loaded = True
     except Exception as e:
-        base_roster = [
-            {"firstName": "Connor", "lastName": "McDavid", "teamName": "CAN", "position": "F"},
-            {"firstName": "Nathan", "lastName": "MacKinnon", "teamName": "CAN", "position": "F"},
-            {"firstName": "Cale", "lastName": "Makar", "teamName": "CAN", "position": "D"},
-            {"firstName": "Sidney", "lastName": "Crosby", "teamName": "CAN", "position": "F"},
-            {"firstName": "Leon", "lastName": "Draisaitl", "teamName": "GER", "position": "F"},
-            {"firstName": "Tim", "lastName": "Stutzle", "teamName": "GER", "position": "F"},
-            {"firstName": "Moritz", "lastName": "Seider", "teamName": "GER", "position": "D"},
-            {"firstName": "Sebastian", "lastName": "Aho", "teamName": "FIN", "position": "F"},
-            {"firstName": "Patrik", "lastName": "Laine", "teamName": "FIN", "position": "F"},
-            {"firstName": "Miro", "lastName": "Heiskanen", "teamName": "FIN", "position": "D"},
-            {"firstName": "William", "lastName": "Nylander", "teamName": "SWE", "position": "F"},
-            {"firstName": "Elias", "lastName": "Pettersson", "teamName": "SWE", "position": "F"},
-            {"firstName": "Rasmus", "lastName": "Dahlin", "teamName": "SWE", "position": "D"},
-            {"firstName": "Jack", "lastName": "Eichel", "teamName": "USA", "position": "F"},
-            {"firstName": "Auston", "lastName": "Matthews", "teamName": "USA", "position": "F"},
-            {"firstName": "Adam", "lastName": "Fox", "teamName": "USA", "position": "D"},
-            {"firstName": "David", "lastName": "Pastrnak", "teamName": "CZE", "position": "F"},
-            {"firstName": "Roman", "lastName": "Josi", "teamName": "SUI", "position": "D"},
-            {"firstName": "Kevin", "lastName": "Fiala", "teamName": "SUI", "position": "F"},
-        ]
+        base_roster = [...]  # fallback
         csv_loaded = False
 
     live_scores = fetch_live_scoring_by_name()
     
-    # DEBUG: Kerää kaikki CSV-avaimet
-    csv_keys = []
-    for player in base_roster[:20]:  # Ensimmäiset 20
-        f_name = str(player['firstName'])
-        l_name = str(player['lastName'])
-        country = str(player['teamName'])
-        full_name = f"{f_name} {l_name}"
-        key = f"{clean_name(full_name)}_{clean_name(country)}"
-        csv_keys.append({
-            'name': full_name,
-            'country': country,
-            'key': key
-        })
-    
-    # DEBUG: Vertaa suoraan
+    # DEBUG: Näytä API-avaimet
     api_keys = list(live_scores.keys())
-    
-    # Etsi täsmäävät
-    matches = []
-    for csv_item in csv_keys:
-        if csv_item['key'] in api_keys:
-            matches.append(csv_item['key'])
-    
-    # DEBUG: Yritä manuaalista täsmäystä ilman clean_namea
-    manual_check = []
-    for api_key in api_keys[:10]:
-        # Oletus: API-avain on muotoa "etunimi_sukunimi_maa" tai "etunimi sukunimi_maa"
-        parts = api_key.rsplit('_', 1)  # Erota viimeisin _maatunnus
-        if len(parts) == 2:
-            name_part, country_part = parts
-            manual_check.append({
-                'api_key': api_key,
-                'name_part': name_part,
-                'country_part': country_part,
-                'stats': live_scores[api_key]
-            })
-    
-    debug_info = {
-        "csv_loaded": csv_loaded,
-        "csv_players": len(base_roster),
-        "api_players_with_stats": len(live_scores),
-        "csv_sample_keys": csv_keys[:10],
-        "api_sample_keys": api_keys[:10],
-        "matches_found": len(matches),
-        "matches": matches[:5],
-        "manual_check": manual_check
-    }
     
     matched_players = 0
     total_points = 0
     sample_matches = []
+    debug_comparison = []
     
     final_list = []
     for player in base_roster:
@@ -250,19 +197,40 @@ def get_all_players_data():
         country = str(player['teamName'])
         pos = str(player['position'])
         
-        full_name = f"{f_name} {l_name}"
-        search_key = f"{clean_name(full_name)}_{clean_name(country)}"
+        # Luo kaksi eri avainta ja testaa kumpi täsmää
+        full_name_key = f"{clean_name(f_name + ' ' + l_name)}_{clean_name(country)}"
+        short_key = create_lookup_key(f_name, l_name) + f"_{clean_name(country)}"
         
-        stats = live_scores.get(search_key, {'goals': 0, 'assists': 0})
+        # Kokeile ensin täyttä nimeä, sitten lyhennettyä
+        stats = live_scores.get(full_name_key)
+        used_key = full_name_key
+        
+        if not stats:
+            stats = live_scores.get(short_key)
+            used_key = short_key
+        
+        if not stats:
+            stats = {'goals': 0, 'assists': 0}
+        
+        # Debug: Vertaa ensimmäisiä 10
+        if len(debug_comparison) < 10:
+            debug_comparison.append({
+                'name': f"{f_name} {l_name}",
+                'country': country,
+                'full_key': full_name_key,
+                'short_key': short_key,
+                'found': stats['goals'] > 0 or stats['assists'] > 0,
+                'stats': stats
+            })
         
         if stats['goals'] > 0 or stats['assists'] > 0:
             matched_players += 1
             total_points += stats['goals'] + stats['assists']
             if len(sample_matches) < 5:
-                sample_matches.append(f"{full_name} ({country}): {stats['goals']}G {stats['assists']}A")
+                sample_matches.append(f"{f_name} {l_name} ({country}): {stats['goals']}G {stats['assists']}A")
         
         final_list.append({
-            "playerId": search_key,
+            "playerId": full_name_key,  # Käytä täyttä nimeä ID:nä
             "firstName": {"default": f_name},
             "lastName": {"default": l_name},
             "teamName": {"default": country},
@@ -272,11 +240,17 @@ def get_all_players_data():
             "points": stats['goals'] + stats['assists']
         })
     
-    debug_info["matched_in_roster"] = matched_players
-    debug_info["total_points"] = total_points
-    debug_info["sample_matches"] = sample_matches
-    
-    st.session_state['player_data_debug'] = debug_info
+    # Tallenna debug
+    st.session_state['player_data_debug'] = {
+        "csv_loaded": csv_loaded,
+        "csv_players": len(base_roster),
+        "api_players_with_stats": len(live_scores),
+        "matched_in_roster": matched_players,
+        "total_points": total_points,
+        "api_sample_keys": api_keys[:10],
+        "debug_comparison": debug_comparison,
+        "sample_matches": sample_matches
+    }
     
     return final_list
 
