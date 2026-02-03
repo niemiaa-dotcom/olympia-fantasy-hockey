@@ -1020,8 +1020,8 @@ elif page == "Leaderboard":
             col1.metric("Total Points", total_pts)
             col2.metric("Forwards", len([r for r in team_roster if r['Pos'] in ['C', 'L', 'R', 'F']]))  # Pitäisi olla 8
             col3.metric("Defensemen", len([r for r in team_roster if r['Pos'] == 'D']))  # Pitäisi olla 4
-            else:
-                st.info("No teams registered yet!")
+    else:
+        st.info("No teams registered yet!")
 
 # --- COUNTRIES SIVU (MINIMI 3 MANAGERS) ---
 elif page == "Countries":
