@@ -732,6 +732,27 @@ elif page == "👤 My Team":
                         st.session_state['edit_temp_selections'][f"chk_{country}_{pid}"] = True
                         st.session_state['edit_temp_selections'][country] = pid
             
+            # Callback-funktiot edit-tilalle
+            def on_edit_player_select(country, player_id, checkbox_key):
+                """Callback kun pelaaja valitaan edit-tilassa"""
+                keys_to_remove = []
+                for key in st.session_state['edit_temp_selections']:
+                    if key.startswith(f"chk_{country}_") and key != checkbox_key:
+                        keys_to_remove.append(key)
+                
+                for key in keys_to_remove:
+                    del st.session_state['edit_temp_selections'][key]
+                
+                st.session_state['edit_temp_selections'][checkbox_key] = True
+                st.session_state['edit_temp_selections'][country] = player_id
+            
+            def on_edit_player_deselect(country, player_id, checkbox_key):
+                """Callback kun pelaajan valinta poistetaan edit-tilassa"""
+                if checkbox_key in st.session_state['edit_temp_selections']:
+                    del st.session_state['edit_temp_selections'][checkbox_key]
+                if st.session_state['edit_temp_selections'].get(country) == player_id:
+                    del st.session_state['edit_temp_selections'][country]
+            
             # Player selection interface (similar to Create Team)
             players_by_country = {}
             for idx, p in enumerate(PLAYERS_DATA):
@@ -759,88 +780,50 @@ elif page == "👤 My Team":
                         for idx, p in players_by_country[country]['F']:
                             label = f"{p['firstName']['default']} {p['lastName']['default']}"
                             checkbox_key = f"chk_{country}_{p['playerId']}"
-                            edit_checkbox_key = f"edit_{country}_{idx}"  # Unique key for edit mode
+                            edit_checkbox_key = f"edit_{country}_{idx}"
                             
                             country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
                             is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
+                            is_this_player_selected = st.session_state['edit_temp_selections'].get(country) == p['playerId']
                             
-                            # TÄRKEÄ: Jos yritetään valita toinen pelaaja samasta maasta, estä se
-                            if country_already_selected and st.session_state['edit_temp_selections'].get(country) != p['playerId']:
-                                checked = st.checkbox(
-                                    label, 
-                                    key=edit_checkbox_key,
-                                    value=False,
-                                    disabled=True
-                                )
-                            else:
-                                checked = st.checkbox(
-                                    label, 
-                                    key=edit_checkbox_key,
-                                    value=is_selected,
-                                    disabled=False
-                                )
-                                
-                                if checked:
-                                    # Poista mahdollinen vanha valinta
-                                    old_player = st.session_state['edit_temp_selections'].get(country)
-                                    if old_player and old_player != p['playerId']:
-                                        for old_key in list(st.session_state['edit_temp_selections'].keys()):
-                                            if old_key.startswith(f"chk_{country}_") and old_key != checkbox_key:
-                                                if old_key in st.session_state['edit_temp_selections']:
-                                                    del st.session_state['edit_temp_selections'][old_key]
-                                    
-                                    st.session_state['edit_temp_selections'][checkbox_key] = True
-                                    st.session_state['edit_temp_selections'][country] = p['playerId']
-                                    selected_player_ids.append(p['playerId'])
-                                else:
-                                    if checkbox_key in st.session_state['edit_temp_selections']:
-                                        del st.session_state['edit_temp_selections'][checkbox_key]
-                                        if st.session_state['edit_temp_selections'].get(country) == p['playerId']:
-                                            del st.session_state['edit_temp_selections'][country]
+                            disabled = country_already_selected and not is_this_player_selected
+                            
+                            st.checkbox(
+                                label, 
+                                key=edit_checkbox_key,
+                                value=is_selected,
+                                disabled=disabled,
+                                on_change=on_edit_player_select if not is_selected else on_edit_player_deselect,
+                                args=(country, p['playerId'], checkbox_key)
+                            )
+                            
+                            if is_selected:
+                                selected_player_ids.append(p['playerId'])
                     
                     with col_d:
                         st.markdown("**Defensemen**")
                         for idx, p in players_by_country[country]['D']:
                             label = f"{p['firstName']['default']} {p['lastName']['default']}"
                             checkbox_key = f"chk_{country}_{p['playerId']}"
-                            edit_checkbox_key = f"edit_{country}_{idx}_D"  # Unique key for edit mode
+                            edit_checkbox_key = f"edit_{country}_{idx}_D"
                             
                             country_already_selected = st.session_state['edit_temp_selections'].get(country) is not None
                             is_selected = st.session_state['edit_temp_selections'].get(checkbox_key, False)
+                            is_this_player_selected = st.session_state['edit_temp_selections'].get(country) == p['playerId']
                             
-                            # TÄRKEÄ: Jos yritetään valita toinen pelaaja samasta maasta, estä se
-                            if country_already_selected and st.session_state['edit_temp_selections'].get(country) != p['playerId']:
-                                checked = st.checkbox(
-                                    label, 
-                                    key=edit_checkbox_key,
-                                    value=False,
-                                    disabled=True
-                                )
-                            else:
-                                checked = st.checkbox(
-                                    label, 
-                                    key=edit_checkbox_key,
-                                    value=is_selected,
-                                    disabled=False
-                                )
-                                
-                                if checked:
-                                    # Poista mahdollinen vanha valinta
-                                    old_player = st.session_state['edit_temp_selections'].get(country)
-                                    if old_player and old_player != p['playerId']:
-                                        for old_key in list(st.session_state['edit_temp_selections'].keys()):
-                                            if old_key.startswith(f"chk_{country}_") and old_key != checkbox_key:
-                                                if old_key in st.session_state['edit_temp_selections']:
-                                                    del st.session_state['edit_temp_selections'][old_key]
-                                    
-                                    st.session_state['edit_temp_selections'][checkbox_key] = True
-                                    st.session_state['edit_temp_selections'][country] = p['playerId']
-                                    selected_player_ids.append(p['playerId'])
-                                else:
-                                    if checkbox_key in st.session_state['edit_temp_selections']:
-                                        del st.session_state['edit_temp_selections'][checkbox_key]
-                                        if st.session_state['edit_temp_selections'].get(country) == p['playerId']:
-                                            del st.session_state['edit_temp_selections'][country]
+                            disabled = country_already_selected and not is_this_player_selected
+                            
+                            st.checkbox(
+                                label, 
+                                key=edit_checkbox_key,
+                                value=is_selected,
+                                disabled=disabled,
+                                on_change=on_edit_player_select if not is_selected else on_edit_player_deselect,
+                                args=(country, p['playerId'], checkbox_key)
+                            )
+                            
+                            if is_selected:
+                                selected_player_ids.append(p['playerId'])
             
             selected_player_ids = list(set(selected_player_ids))
             
@@ -1028,6 +1011,29 @@ elif page == "✏️ Create Team":
     if 'temp_selections' not in st.session_state:
         st.session_state['temp_selections'] = {}
     
+    # Callback-funktio joka suoritetaan ENNEN renderöintiä
+    def on_player_select(country, player_id, checkbox_key):
+        """Callback kun pelaaja valitaan - päivittää session staten HETI"""
+        # Poista kaikki muut valinnat tästä maasta
+        keys_to_remove = []
+        for key in st.session_state['temp_selections']:
+            if key.startswith(f"chk_{country}_") and key != checkbox_key:
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            del st.session_state['temp_selections'][key]
+        
+        # Aseta uusi valinta
+        st.session_state['temp_selections'][checkbox_key] = True
+        st.session_state['temp_selections'][country] = player_id
+    
+    def on_player_deselect(country, player_id, checkbox_key):
+        """Callback kun pelaajan valinta poistetaan"""
+        if checkbox_key in st.session_state['temp_selections']:
+            del st.session_state['temp_selections'][checkbox_key]
+        if st.session_state['temp_selections'].get(country) == player_id:
+            del st.session_state['temp_selections'][country]
+    
     # Luo valintalista maittain
     for country in sorted_countries:
         flag = get_flag(country)
@@ -1041,50 +1047,29 @@ elif page == "✏️ Create Team":
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
                     checkbox_key = f"chk_{country}_{idx}"
                     
-                    # Tarkista onko maa jo valittu toiselta pelaajalta ENNEN checkboxia
+                    # Tarkista session state ENNEN renderöintiä
                     country_already_selected = st.session_state['temp_selections'].get(country) is not None
                     is_selected = st.session_state['temp_selections'].get(checkbox_key, False)
                     
-                    # Jos maa on jo valittu JA tämä pelaaja EI ole se valittu → disable
-                    disabled = country_already_selected and not is_selected
+                    # Tarkista onko TÄMÄ pelaaja se valittu
+                    is_this_player_selected = st.session_state['temp_selections'].get(country) == p['playerId']
                     
-                    # TÄRKEÄ: Jos yritetään valita toinen pelaaja samasta maasta, estä se
-                    if country_already_selected and st.session_state['temp_selections'].get(country) != p['playerId']:
-                        # Tämä pelaaja on eri kuin jo valittu → disabled
-                        checked = st.checkbox(
-                            label, 
-                            key=checkbox_key,
-                            value=False,
-                            disabled=True
-                        )
-                    else:
-                        # Joko ei vielä valintaa tai tämä on se valittu pelaaja
-                        checked = st.checkbox(
-                            label, 
-                            key=checkbox_key,
-                            value=is_selected,
-                            disabled=False
-                        )
-                        
-                        # Päivitä session state
-                        if checked:
-                            # Poista mahdollinen vanha valinta samasta maasta
-                            old_player = st.session_state['temp_selections'].get(country)
-                            if old_player and old_player != p['playerId']:
-                                # Etsi ja poista vanha checkbox
-                                for old_key in list(st.session_state['temp_selections'].keys()):
-                                    if old_key.startswith(f"chk_{country}_") and old_key != checkbox_key:
-                                        if old_key in st.session_state['temp_selections']:
-                                            del st.session_state['temp_selections'][old_key]
-                            
-                            st.session_state['temp_selections'][checkbox_key] = True
-                            st.session_state['temp_selections'][country] = p['playerId']
-                            selected_player_ids.append(p['playerId'])
-                        else:
-                            if checkbox_key in st.session_state['temp_selections']:
-                                del st.session_state['temp_selections'][checkbox_key]
-                                if st.session_state['temp_selections'].get(country) == p['playerId']:
-                                    del st.session_state['temp_selections'][country]
+                    # Disable jos maa on valittu JA tämä ei ole se valittu pelaaja
+                    disabled = country_already_selected and not is_this_player_selected
+                    
+                    # Käytä checkboxia ILMAN if-else logiikkaa, pelkkä disabled-parametri riittää
+                    st.checkbox(
+                        label, 
+                        key=checkbox_key,
+                        value=is_selected,
+                        disabled=disabled,
+                        on_change=on_player_select if not is_selected else on_player_deselect,
+                        args=(country, p['playerId'], checkbox_key)
+                    )
+                    
+                    # Kerää valitut pelaajat
+                    if is_selected:
+                        selected_player_ids.append(p['playerId'])
                         
             with col_d:
                 st.markdown("**Defensemen**")
@@ -1092,47 +1077,29 @@ elif page == "✏️ Create Team":
                     label = f"{p['firstName']['default']} {p['lastName']['default']}"
                     checkbox_key = f"chk_{country}_{idx}"
                     
-                    # Tarkista onko maa jo valittu toiselta pelaajalta ENNEN checkboxia
+                    # Tarkista session state ENNEN renderöintiä
                     country_already_selected = st.session_state['temp_selections'].get(country) is not None
                     is_selected = st.session_state['temp_selections'].get(checkbox_key, False)
                     
-                    # TÄRKEÄ: Jos yritetään valita toinen pelaaja samasta maasta, estä se
-                    if country_already_selected and st.session_state['temp_selections'].get(country) != p['playerId']:
-                        # Tämä pelaaja on eri kuin jo valittu → disabled
-                        checked = st.checkbox(
-                            label, 
-                            key=checkbox_key,
-                            value=False,
-                            disabled=True
-                        )
-                    else:
-                        # Joko ei vielä valintaa tai tämä on se valittu pelaaja
-                        checked = st.checkbox(
-                            label, 
-                            key=checkbox_key,
-                            value=is_selected,
-                            disabled=False
-                        )
-                        
-                        # Päivitä session state
-                        if checked:
-                            # Poista mahdollinen vanha valinta samasta maasta
-                            old_player = st.session_state['temp_selections'].get(country)
-                            if old_player and old_player != p['playerId']:
-                                # Etsi ja poista vanha checkbox
-                                for old_key in list(st.session_state['temp_selections'].keys()):
-                                    if old_key.startswith(f"chk_{country}_") and old_key != checkbox_key:
-                                        if old_key in st.session_state['temp_selections']:
-                                            del st.session_state['temp_selections'][old_key]
-                            
-                            st.session_state['temp_selections'][checkbox_key] = True
-                            st.session_state['temp_selections'][country] = p['playerId']
-                            selected_player_ids.append(p['playerId'])
-                        else:
-                            if checkbox_key in st.session_state['temp_selections']:
-                                del st.session_state['temp_selections'][checkbox_key]
-                                if st.session_state['temp_selections'].get(country) == p['playerId']:
-                                    del st.session_state['temp_selections'][country]
+                    # Tarkista onko TÄMÄ pelaaja se valittu
+                    is_this_player_selected = st.session_state['temp_selections'].get(country) == p['playerId']
+                    
+                    # Disable jos maa on valittu JA tämä ei ole se valittu pelaaja
+                    disabled = country_already_selected and not is_this_player_selected
+                    
+                    # Käytä checkboxia callback-funktiolla
+                    st.checkbox(
+                        label, 
+                        key=checkbox_key,
+                        value=is_selected,
+                        disabled=disabled,
+                        on_change=on_player_select if not is_selected else on_player_deselect,
+                        args=(country, p['playerId'], checkbox_key)
+                    )
+                    
+                    # Kerää valitut pelaajat
+                    if is_selected:
+                        selected_player_ids.append(p['playerId'])
     
     # Poista duplikaatit
     selected_player_ids = list(set(selected_player_ids))
