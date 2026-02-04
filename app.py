@@ -307,7 +307,7 @@ def get_country_leaderboard():
     final_stats = defaultdict(lambda: {"points": [], "managers": 0, "countries": []})
     
     for country, points_list in country_points.items():
-        if len(points_list) <= 3:
+        if len(points_list) < 3:
             final_stats["OTHERS"]["points"].extend(points_list)
             final_stats["OTHERS"]["managers"] += len(points_list)
             final_stats["OTHERS"]["countries"].append(country)
